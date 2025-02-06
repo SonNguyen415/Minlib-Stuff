@@ -29,7 +29,6 @@ def extract_symbols(og_section):
     subsection_addresses = []
     for symbol in binary.symbols:
         if og_section.virtual_address <= symbol.value < og_section.virtual_address + og_section.size:
-            print(symbol.name)
             subsection_addresses.append((symbol.value, symbol.name))
         
     # Sort functions by address
