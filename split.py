@@ -4,24 +4,11 @@ import subprocess
 
 INPUT = "test"  
 OUTPUT = "result"
-TEST = "test.archobj"
 binary = lief.parse(INPUT)
 
 def run_command(command):
     """Runs a shell command and returns the output."""
     return subprocess.run(command, shell=True, text=True, capture_output=True).stdout
-
-def output_result():
-    """ 
-    For debugging purposes, this function will run the original and new binary
-    """
-    run_command(f"readelf -S {INPUT} > {INPUT}_sections.txt")
-    run_command(f"readelf -S {OUTPUT} > {OUTPUT}_sections.txt")
-    run_command(f"chmod +x {OUTPUT}")
-
-    run_command(f"./{INPUT} < {TEST} > {INPUT}.txt")
-    run_command(f"./{OUTPUT} < {TEST} > {OUTPUT}.txt")
-    run_command(f"diff {INPUT}.txt {OUTPUT}.txt > diff.txt")
 
 def get_section(name):
     # Find the section
@@ -48,8 +35,8 @@ def create_sections(og_section, subsection_addresses):
 
     # Create sections for each function
     for i, (sub_addr, sub_name) in enumerate(subsection_addresses):
-        if sub_name == "__data_start":
-            continue
+        # if sub_name == "__data_start":
+        #     continue
  
         # Determine new section size
         if i < len(subsection_addresses) - 1:
@@ -69,9 +56,11 @@ def create_sections(og_section, subsection_addresses):
         new_section.size = len(function_bytes)
         new_section.alignment = og_section.alignment
         new_section.flags = og_section.flags
+
+        print(new_section.name, hex(new_section.virtual_address))
             
         # Add the new section
-        binary.add(new_section, loaded=True)  
+        binary.add(new_section, loaded=False)  
 
     # Remove the original section
     binary.remove(og_section)
@@ -87,4 +76,4 @@ subsection_addresses = extract_symbols(text_section)
 create_sections(text_section, subsection_addresses)
 
 binary.write(OUTPUT)
-# output_result()
+run_command(f"chmod +x {OUTPUT}")
