@@ -1,10 +1,16 @@
 import lief
-import os
 import subprocess
+import sys
 
-INPUT = "test"  
-OUTPUT = "result"
-binary = lief.parse(INPUT)
+
+if len(sys.argv) < 3:
+    print("Usage: python split.py <binary> <output>")
+    print("Please provide the binary to split.")
+    exit(1)
+
+input_file = sys.argv[1]
+output_file = sys.argv[2]
+binary = lief.parse(input_file)
 
 def run_command(command):
     """Runs a shell command and returns the output."""
@@ -33,31 +39,26 @@ def extract_symbols(og_section):
 def create_sections(og_section, subsection_addresses):
     base_addr = og_section.virtual_address
 
-    # Create sections for each function
+    # Create new section for each symbol in the section
     for i, (sub_addr, sub_name) in enumerate(subsection_addresses):
-        # if sub_name == "__data_start":
-        #     continue
- 
-        # Determine new section size
+        # Determine new section size for the current symbol
         if i < len(subsection_addresses) - 1:
             next_sub_addr = subsection_addresses[i + 1][0]
             func_size = next_sub_addr - sub_addr
         else:
-            func_size = (base_addr + og_section.size) - sub_addr  # Last function until .text ends
+            func_size = (base_addr + og_section.size) - sub_addr
 
         # Extract new section bytes
         offset = sub_addr - base_addr
-        function_bytes = og_section.content[offset:offset + func_size]
+        content = og_section.content[offset:offset + func_size]
 
         # Create a new section 
         new_section = lief.ELF.Section(f"{og_section.name}.{sub_name}")
-        new_section.content = function_bytes
+        new_section.content = content
         new_section.virtual_address = sub_addr
-        new_section.size = len(function_bytes)
+        new_section.size = len(content)
         new_section.alignment = og_section.alignment
         new_section.flags = og_section.flags
-
-        print(new_section.name, hex(new_section.virtual_address))
             
         # Add the new section
         binary.add(new_section, loaded=False)  
@@ -76,4 +77,4 @@ subsection_addresses = extract_symbols(text_section)
 create_sections(text_section, subsection_addresses)
 
 binary.write(OUTPUT)
-run_command(f"chmod +x {OUTPUT}")
+run_command(f"chmod +x {output_file}")
