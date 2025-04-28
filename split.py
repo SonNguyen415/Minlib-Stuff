@@ -2,10 +2,9 @@ import lief
 import subprocess
 import sys
 
-
 if len(sys.argv) < 3:
     print("Usage: python split.py <binary> <output>")
-    print("Please provide the binary to split.")
+    print("Please provide the binary to split and an output.")
     exit(1)
 
 input_file = sys.argv[1]
@@ -76,5 +75,5 @@ text_section = get_section(".text")
 subsection_addresses = extract_symbols(text_section)
 create_sections(text_section, subsection_addresses)
 
-binary.write(OUTPUT)
+binary.write(output_file)
 run_command(f"chmod +x {output_file}")
