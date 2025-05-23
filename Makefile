@@ -9,12 +9,14 @@ TEST_BIN = test
 SPLIT_SRC = split.cpp
 SPLIT_BIN = split
 OUTPUT = output
+
+OFILES = $(wildcard *.o)
+OUTPUT_FILES = $(wildcard output*)
 TXT_FILES := $(filter-out r5emu.txt,$(wildcard *.txt))
 
 .PHONY: all run clean test_dump output_dump tests 
 
 all: $(TEST_BIN) $(SPLIT_BIN) $(OUTPUT)
-
 
 run: $(SPLIT_BIN)
 	@if [ -z "$(INPUT)" ]; then \
@@ -65,4 +67,4 @@ tests: all
 	@./test2
 
 clean:
-	rm -f $(TEST_BIN) $(SPLIT_BIN) $(OUTPUT) $(TXT_FILES) test0 test1 test2
+	rm -f $(TEST_BIN) $(SPLIT_BIN) $(TXT_FILES) $(OUTPUT_FILES) $(OFILES) test0 test1 test2
