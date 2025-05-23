@@ -3,6 +3,7 @@ venv/
 output
 split
 test*
+output*
 *.txt
 !r5emu.txt
 !test.sh

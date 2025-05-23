@@ -23,6 +23,7 @@ def get_section(name):
     if not section:
         print(f"No {name} section found!")
         exit(1)
+    print(f"Found {section.name} section!")
     return section
 
 def remove_section(name, clear):
@@ -30,8 +31,6 @@ def remove_section(name, clear):
     section = get_section(name)
     binary.remove(section, clear)
 
-# Remove the .text section
-remove_section(".text", False)
 
 if test_mode == "test1":
     # Test 1: Remove unused section, should still be fine

@@ -1,5 +1,5 @@
 # Compiler settings
-CC = gcc
+CC = gcc -g
 CXX = g++
 CXXFLAGS = -std=c++17 -I../ELFIO
 
@@ -13,6 +13,8 @@ TXT_FILES := $(filter-out r5emu.txt,$(wildcard *.txt))
 
 .PHONY: all run clean test_dump output_dump tests 
 
+all: $(TEST_BIN) $(SPLIT_BIN) $(OUTPUT)
+
 
 run: $(SPLIT_BIN)
 	@if [ -z "$(INPUT)" ]; then \
@@ -23,7 +25,6 @@ run: $(SPLIT_BIN)
 	@./$(SPLIT_BIN) $(INPUT) $(OUTPUT)
 	chmod +x $(OUTPUT)
 
-all: $(TEST_BIN) $(SPLIT_BIN) $(OUTPUT)
 
 $(TEST_BIN): $(TEST_SRC)
 	$(CC) -o $@ $<
