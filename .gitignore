@@ -1,7 +1,8 @@
 myenv/
 venv/
 output
-test
 split
+test*
 *.txt
 !r5emu.txt
+!test.sh

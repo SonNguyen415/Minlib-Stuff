@@ -136,7 +136,6 @@ void create_sections_from_symbols(elfio& writer, segment* text_segment, section*
 
         // Add the new section to the same segment as the original .text section
         text_segment->add_section(new_sec, text_align);
-        std::cout << "Created section: " << new_name << " @ 0x" << std::hex << sym.value << " (" << size << " bytes)\n";
     }
 }
 
