@@ -11,7 +11,17 @@ SPLIT_BIN = split
 OUTPUT = output
 TXT_FILES := $(filter-out r5emu.txt,$(wildcard *.txt))
 
-.PHONY: all run clean test_dump output_dump
+.PHONY: all run clean test_dump output_dump tests 
+
+
+run: $(SPLIT_BIN)
+	@if [ -z "$(INPUT)" ]; then \
+		echo "Error: Please provide INPUT via 'make run INPUT=your_binary'"; \
+		exit 1; \
+	fi
+	@echo "Using input binary: $(INPUT)"
+	@./$(SPLIT_BIN) $(INPUT) $(OUTPUT)
+	chmod +x $(OUTPUT)
 
 all: $(TEST_BIN) $(SPLIT_BIN) $(OUTPUT)
 
@@ -32,7 +42,7 @@ test_dump: $(TEST_BIN)
 output_dump: $(OUTPUT)
 	objdump -SRThrtpsz $(OUTPUT) > output.txt
 
-run: all
+tests: all
 	@echo "----------------------------------"
 	
 	@echo "Running Original: "
