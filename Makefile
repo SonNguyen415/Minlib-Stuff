@@ -34,6 +34,10 @@ output_dump: $(OUTPUT)
 
 run: all
 	@echo "----------------------------------"
+	
+	@echo "Running Original: "
+	@./test
+	@echo "----------------------------------"
 
 	@echo "Running Test 0: Compare with original"
 	@python3 test.py $(OUTPUT) test0
