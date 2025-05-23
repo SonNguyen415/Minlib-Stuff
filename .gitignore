@@ -1,2 +1,7 @@
 myenv/
 venv/
+output
+test
+split
+*.txt
+!r5emu.txt

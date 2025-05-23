@@ -28,7 +28,7 @@
 //     }
 // }
 
-void fn1() 
+void unused() 
 {
     printf("Hello from fn1\n");
 }
