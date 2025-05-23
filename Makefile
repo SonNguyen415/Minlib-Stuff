@@ -1,7 +1,7 @@
 # Compiler settings
 CC = gcc -g
 CXX = g++
-CXXFLAGS = -std=c++17 -I../ELFIO
+CXXFLAGS = -std=c++17 -Iexternal/ELFIO
 
 # Files
 TEST_SRC = test.c
