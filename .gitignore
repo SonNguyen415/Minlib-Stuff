@@ -6,3 +6,6 @@ test*
 *.txt
 !r5emu.txt
 !test.sh
+.vscode/
+.DS_Store
+*.pyc

@@ -11,8 +11,7 @@ SPLIT_BIN = split
 OUTPUT = output
 TXT_FILES := $(filter-out r5emu.txt,$(wildcard *.txt))
 
-
-.PHONY: all run clean
+.PHONY: all run clean test_dump output_dump
 
 all: $(TEST_BIN) $(SPLIT_BIN) $(OUTPUT)
 
@@ -26,29 +25,29 @@ $(SPLIT_BIN): $(SPLIT_SRC)
 $(OUTPUT): $(SPLIT_BIN) $(TEST_BIN)
 	./$(SPLIT_BIN) $(TEST_BIN) $(OUTPUT)
 
-# objdump dump outputs (optional, if needed)
+# Optional objdump dump outputs
 test_dump: $(TEST_BIN)
 	objdump -SRThrtpsz $(TEST_BIN) > test.txt
 
 output_dump: $(OUTPUT)
 	objdump -SRThrtpsz $(OUTPUT) > output.txt
-run: $(OUTPUT)
-	@./run.sh
+
+run: all
 	@echo "----------------------------------"
-	
+
 	@echo "Running Test 0: Compare with original"
-	@python3 test.py output test0
+	@python3 test.py $(OUTPUT) test0
 	@./test0
 	@echo "----------------------------------"
-	
+
 	@echo "Running Test 1: Remove unused section"
-	@python3 test.py output test1 test1
+	@python3 test.py $(OUTPUT) test1 test1
 	@./test1
 	@echo "----------------------------------"
-	
+
 	@echo "Running Test 2: Remove main (should crash)"
-	@python3 test.py output test2 test2
+	@python3 test.py $(OUTPUT) test2 test2
 	@./test2
 
 clean:
-	rm -f $(TEST_BIN) $(SPLIT_BIN) $(OUTPUT) $(TXT_FILES) test test0 test1 test2
+	rm -f $(TEST_BIN) $(SPLIT_BIN) $(OUTPUT) $(TXT_FILES) test0 test1 test2
