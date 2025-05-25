@@ -20,32 +20,6 @@ struct Symbol {
 
 std::vector<Symbol> symbols_list;
 
-// Function to load ELF file
-bool load_elf_file(const std::string& input_path, elfio& reader) {
-    if (!reader.load(input_path)) {
-        std::cerr << "Failed to load ELF file: " << input_path << "\n";
-        return false;
-    }
-    return true;
-}
-
-// Function to find the .text section
-section* find_text_section(elfio& reader) {
-    section* text_sec = reader.sections[".text"];
-    if (text_sec == nullptr) {
-        std::cerr << "No .text section found.\n";
-    }
-    return text_sec;
-}
-
-// Function to find the symbol table
-symbol_section_accessor find_symbol_table(elfio& reader, section* symtab_sec) {
-    if (symtab_sec == nullptr) {
-        std::cerr << "No .symtab section found.\n";
-    }
-    return symbol_section_accessor(reader, symtab_sec);
-}
-
 // Function to find the segment containing the .text section
 segment* find_text_segment(elfio& reader, section* text_sec) {
     segment* text_segment = nullptr;
@@ -97,13 +71,17 @@ void sort_symbols_by_value() {
 }
 
 // Function to create new section from symbols
-void create_sections_from_symbols(elfio& writer, segment* text_segment, section* text_sec) {
+void create_sections_from_symbols(elfio& writer, segment* text_segment, section* text_sec, symbol_section_accessor& symbols) {
     const char* text_data = text_sec->get_data();
     Elf_Word text_type = text_sec->get_type();
     Elf_Word text_flags = text_sec->get_flags();
     Elf_Word text_align = text_sec->get_addr_align();
     Elf_Xword text_size = text_sec->get_size();
     Elf_Xword text_addr = text_sec->get_address();
+
+    // Find the symbol table section
+    section* symtab = writer.sections[".symtab"];
+    ELFIO::string_section_accessor str_accessor(writer.sections[symtab->get_link()]);
 
     for (Elf_Xword i = 0; i < symbols_list.size(); ++i) {
         const Symbol& sym = symbols_list[i];
@@ -134,19 +112,15 @@ void create_sections_from_symbols(elfio& writer, segment* text_segment, section*
         new_sec->set_data(fn_code);
         new_sec->set_address(sym.value);
 
+        // Add symbol mapping to the section
+        Elf_Word name_offset = str_accessor.add_string(sym.name);
+        symbols.add_symbol(name_offset, sym.value, sym.size, sym.bind, sym.type, sym.other, new_sec->get_index());
+
         // Add the new section to the same segment as the original .text section
         text_segment->add_section(new_sec, text_align);
     }
 }
 
-// Function to save the modified ELF
-bool save_elf_file(elfio& writer, const std::string& output_path) {
-    if (!writer.save(output_path)) {
-        std::cerr << "Failed to save output ELF to " << output_path << "\n";
-        return false;
-    }
-    return true;
-}
 
 int main(int argc, char** argv) {
     if (argc < 3) {
@@ -158,18 +132,19 @@ int main(int argc, char** argv) {
     std::string output_path = argv[2];
 
     elfio reader;
-    if (!load_elf_file(input_path, reader)) {
+    if (!reader.load(input_path)) {
+        std::cerr << "Failed to load ELF file: " << input_path << "\n";
         return 1;
     }
 
     // Find .text section and symbol table
-    section* text_sec = find_text_section(reader);
+    section* text_sec = reader.sections[".text"];
     if (text_sec == nullptr) {
         return 1;
     }
 
     section* symtab_sec = reader.sections[".symtab"];
-    symbol_section_accessor symbols = find_symbol_table(reader, symtab_sec);
+    symbol_section_accessor symbols = symbol_section_accessor(reader, symtab_sec);
 
     // Find the segment containing the .text section
     segment* text_segment = find_text_segment(reader, text_sec);
@@ -182,10 +157,11 @@ int main(int argc, char** argv) {
     sort_symbols_by_value();
 
     // Create new sections from symbols
-    create_sections_from_symbols(reader, text_segment, text_sec);
+    create_sections_from_symbols(reader, text_segment, text_sec, symbols);
 
     // Save the modified ELF
-    if (!save_elf_file(reader, output_path)) {
+    if (!reader.save(output_path)) {
+        std::cerr << "Failed to save output ELF to " << output_path << "\n";
         return 1;
     }
 

@@ -14,19 +14,9 @@ OFILES = $(wildcard *.o)
 OUTPUT_FILES = $(wildcard output*)
 TXT_FILES := $(filter-out r5emu.txt,$(wildcard *.txt))
 
-.PHONY: all run clean test_dump output_dump tests 
+.PHONY: all run clean test_dump output_dump tests remove
 
 all: $(TEST_BIN) $(SPLIT_BIN) $(OUTPUT)
-
-run: $(SPLIT_BIN)
-	@if [ -z "$(INPUT)" ]; then \
-		echo "Error: Please provide INPUT via 'make run INPUT=your_binary'"; \
-		exit 1; \
-	fi
-	@echo "Using input binary: $(INPUT)"
-	@./$(SPLIT_BIN) $(INPUT) $(OUTPUT)
-	chmod +x $(OUTPUT)
-
 
 $(TEST_BIN): $(TEST_SRC)
 	$(CC) -o $@ $<
@@ -37,13 +27,15 @@ $(SPLIT_BIN): $(SPLIT_SRC)
 
 $(OUTPUT): $(SPLIT_BIN) $(TEST_BIN)
 	./$(SPLIT_BIN) $(TEST_BIN) $(OUTPUT)
+	chmod +x $(OUTPUT)
 
-# Optional objdump dump outputs
-test_dump: $(TEST_BIN)
-	objdump -SRThrtpsz $(TEST_BIN) > test.txt
+dump:
+	@if [ -z "$(BIN)" ]; then \
+		echo "Usage: make dump BIN=binary"; \
+		exit 1; \
+	fi
+	objdump -SRThrtpsz $(BIN) > $(BIN).txt
 
-output_dump: $(OUTPUT)
-	objdump -SRThrtpsz $(OUTPUT) > output.txt
 
 tests: all
 	@echo "----------------------------------"
