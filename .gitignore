@@ -1,9 +1,7 @@
 myenv/
 venv/
-output
-split
+splitter
 test*
-output*
 *.txt
 !r5emu.txt
 !*.c
@@ -12,3 +10,4 @@ output*
 .vscode/
 .DS_Store
 *.pyc
+.outputs

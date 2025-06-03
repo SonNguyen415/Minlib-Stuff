@@ -1,33 +1,42 @@
 # Compiler settings
-CC = gcc -g
+CC = gcc 
 CXX = g++
 CXXFLAGS = -std=c++17 -Iexternal/ELFIO
 
 # Files
+SPLIT_SRC = splitter.cpp
+SPLIT_BIN = splitter
+
+# Test Files
 TEST_SRC = test.c
 TEST_BIN = test
-SPLIT_SRC = split.cpp
-SPLIT_BIN = split
-OUTPUT = output
-
 OFILES = $(wildcard *.o)
-OUTPUT_FILES = $(wildcard output*)
 TXT_FILES := $(filter-out r5emu.txt,$(wildcard *.txt))
+OUTPUT_LIST = .outputs
+OUTPUT_FILES := $(shell cat $(OUTPUT_LIST) 2>/dev/null)
 
-.PHONY: all run clean test_dump output_dump tests remove
+.PHONY: all run clean dump tests
 
-all: $(TEST_BIN) $(SPLIT_BIN) $(OUTPUT)
+all: $(TEST_BIN) $(SPLIT_BIN)
 
+# Compile the test file
 $(TEST_BIN): $(TEST_SRC)
 	$(CC) -o $@ $<
-	chmod +x $@
 
+# Compile the splitter
 $(SPLIT_BIN): $(SPLIT_SRC)
 	$(CXX) $(CXXFLAGS) -o $@ $<
 
-$(OUTPUT): $(SPLIT_BIN) $(TEST_BIN)
-	./$(SPLIT_BIN) $(TEST_BIN) $(OUTPUT)
+# Compile the splitter and run it on a given binary
+run: $(SPLIT_BIN)
+	@if [ -z "$(BIN)" ] || [ -z "$(OUTPUT)" ]; then \
+		echo "Usage: make split BIN=binary OUTPUT=output"; \
+		exit 1; \
+	fi
+	./$(SPLIT_BIN) $(BIN) $(OUTPUT)
 	chmod +x $(OUTPUT)
+	@echo $(OUTPUT) >> $(OUTPUT_LIST)
+	@sort -u $(OUTPUT_LIST) -o $(OUTPUT_LIST)
 
 dump:
 	@if [ -z "$(BIN)" ]; then \
@@ -59,4 +68,4 @@ tests: all
 	@./test2
 
 clean:
-	rm -f $(TEST_BIN) $(SPLIT_BIN) $(TXT_FILES) $(OUTPUT_FILES) $(OFILES) test0 test1 test2
+	rm -f $(TEST_BIN) $(SPLIT_BIN) $(TXT_FILES) $(OFILES) $(OUTPUT_FILES) $(OUTPUT_LIST) test0 test1 test2
