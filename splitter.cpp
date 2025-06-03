@@ -136,7 +136,6 @@ int main(int argc, char** argv) {
         std::cerr << "Failed to load ELF file: " << input_path << "\n";
         return 1;
     }
-    printf("Finished loading\n");
 
     // Find .text section and symbol table
     section* text_sec = reader.sections[".text"];
@@ -144,22 +143,18 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    printf("Found text section\n");
     // Find the segment containing the .text section
     segment* text_segment = find_text_segment(reader, text_sec);
     if (text_segment == nullptr) {
         return 1;
     }
 
-    printf("Found text segment\n");
     section* symtab_sec = reader.sections[".symtab"];
     if (symtab_sec == nullptr) {
         std::cerr << "No symbol table section found.\n";
         return 1;
     }
     symbol_section_accessor symbols = symbol_section_accessor(reader, symtab_sec);
-
-    printf("Found symbol section\n");
 
     // Gather and sort symbols
     gather_symbols(symbols, text_sec);
@@ -168,7 +163,6 @@ int main(int argc, char** argv) {
     // Create new sections from symbols
     create_sections_from_symbols(reader, text_segment, text_sec, symbols);
 
-    printf("Saving modified ELF to %s\n", output_path.c_str());
     // Save the modified ELF
     if (!reader.save(output_path)) {
         std::cerr << "Failed to save output ELF to " << output_path << "\n";

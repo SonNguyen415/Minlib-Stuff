@@ -8,10 +8,11 @@ SPLIT_SRC = splitter.cpp
 SPLIT_BIN = splitter
 
 # Test Files
+TESTER = test.py
 TEST_SRC = test.c
 TEST_BIN = test
 OFILES = $(wildcard *.o)
-TXT_FILES := $(filter-out r5emu.txt,$(wildcard *.txt))
+TXT_FILES := $(wildcard *.txt) 
 OUTPUT_LIST = .outputs
 OUTPUT_FILES := $(shell cat $(OUTPUT_LIST) 2>/dev/null)
 
@@ -27,17 +28,6 @@ $(TEST_BIN): $(TEST_SRC)
 $(SPLIT_BIN): $(SPLIT_SRC)
 	$(CXX) $(CXXFLAGS) -o $@ $<
 
-# Compile the splitter and run it on a given binary
-run: $(SPLIT_BIN)
-	@if [ -z "$(BIN)" ] || [ -z "$(OUTPUT)" ]; then \
-		echo "Usage: make split BIN=binary OUTPUT=output"; \
-		exit 1; \
-	fi
-	./$(SPLIT_BIN) $(BIN) $(OUTPUT)
-	chmod +x $(OUTPUT)
-	@echo $(OUTPUT) >> $(OUTPUT_LIST)
-	@sort -u $(OUTPUT_LIST) -o $(OUTPUT_LIST)
-
 dump:
 	@if [ -z "$(BIN)" ]; then \
 		echo "Usage: make dump BIN=binary"; \
@@ -45,26 +35,42 @@ dump:
 	fi
 	objdump -SRThrtpsz $(BIN) > $(BIN).txt
 
+# Compile the splitter and run it on a given binary, we'll also keep track of the output files if we need to remove them later
+run: $(SPLIT_BIN)
+	@if [ -z "$(BIN)" ] || [ -z "$(OUTPUT)" ]; then \
+		echo "Usage: make run BIN=binary OUTPUT=output"; \
+		exit 1; \
+	fi
+	./$(SPLIT_BIN) $(BIN) $(OUTPUT)
+	@objcopy -R .text $(OUTPUT) $(OUTPUT)
+	@chmod +x $(OUTPUT)
+	@echo $(OUTPUT) >> $(OUTPUT_LIST)
+	@sort -u $(OUTPUT_LIST) -o $(OUTPUT_LIST)
 
-tests: all
+tests: 
+	@if [ -z "$(OUTPUT)" ]; then \
+		echo "Usage: make tests OUTPUT=output. Might need to run make run first."; \
+		exit 1; \
+	fi
+
 	@echo "----------------------------------"
-	
+
 	@echo "Running Original: "
 	@./test
 	@echo "----------------------------------"
 
 	@echo "Running Test 0: Compare with original"
-	@python3 test.py $(OUTPUT) test0
+	@objcopy $(OUTPUT) test0
 	@./test0
 	@echo "----------------------------------"
 
 	@echo "Running Test 1: Remove unused section"
-	@python3 test.py $(OUTPUT) test1 test1
+	@objcopy -R .text.unused $(OUTPUT) test1
 	@./test1
 	@echo "----------------------------------"
 
 	@echo "Running Test 2: Remove main (should crash)"
-	@python3 test.py $(OUTPUT) test2 test2
+	@objcopy -R .text.main $(OUTPUT) test2
 	@./test2
 
 clean:
