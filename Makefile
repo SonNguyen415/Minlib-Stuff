@@ -6,6 +6,8 @@ CXXFLAGS = -std=c++17 -Iexternal/ELFIO
 # Files
 SPLIT_SRC = splitter.cpp
 SPLIT_BIN = splitter
+PARSER_SRC = parser.cpp
+PARSER_BIN = parser
 
 # Test Files
 TESTER = test.py
@@ -28,6 +30,11 @@ $(TEST_BIN): $(TEST_SRC)
 $(SPLIT_BIN): $(SPLIT_SRC)
 	$(CXX) $(CXXFLAGS) -o $@ $<
 
+
+# Compile the splitter
+$(PARSER_BIN): $(PARSER_SRC)
+	$(CXX) $(CXXFLAGS) -o $@ $<
+
 dump:
 	@if [ -z "$(BIN)" ]; then \
 		echo "Usage: make dump BIN=binary"; \
@@ -41,15 +48,13 @@ run: $(SPLIT_BIN)
 		echo "Usage: make run BIN=binary OUTPUT=output"; \
 		exit 1; \
 	fi
-	./$(SPLIT_BIN) $(BIN) $(OUTPUT)
-	@objcopy -R .text $(OUTPUT) $(OUTPUT)
-	@chmod +x $(OUTPUT)
+	@./$(SPLIT_BIN) $(BIN) $(OUTPUT)
 	@echo $(OUTPUT) >> $(OUTPUT_LIST)
 	@sort -u $(OUTPUT_LIST) -o $(OUTPUT_LIST)
 
 tests: 
 	@if [ -z "$(OUTPUT)" ]; then \
-		echo "Usage: make tests OUTPUT=output. Might need to run make run first."; \
+		echo "Usage: make tests OUTPUT=output. Might need to do make run first."; \
 		exit 1; \
 	fi
 
@@ -74,4 +79,4 @@ tests:
 	@./test2
 
 clean:
-	rm -f $(TEST_BIN) $(SPLIT_BIN) $(TXT_FILES) $(OFILES) $(OUTPUT_FILES) $(OUTPUT_LIST) test0 test1 test2
+	rm -f $(TEST_BIN) $(SPLIT_BIN) $(PARSER_BIN) $(TXT_FILES) $(OFILES) $(OUTPUT_FILES) $(OUTPUT_LIST) test0 test1 test2

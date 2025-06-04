@@ -8,6 +8,8 @@ struct data {
     unsigned long arr[10];
 };
 
+int unused_global;
+
 struct data *fn1() {
     struct data *d = malloc(sizeof(struct data));
     d->a = 10;
@@ -22,6 +24,8 @@ void fn2(struct data *d) {
 }
 
 void unused() {
+    int unused_variable;
+    unused_global = 42; // This variable is unused
     printf("Hello from fn1\n");
 }
 
