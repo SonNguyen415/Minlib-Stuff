@@ -74,6 +74,32 @@ sort_symbols_by_value()
     });
 }
 
+void
+print_sections_by_segment(elfio& writer)
+{
+    std::cout << "Displaying sections by segment:\n";
+    for (int i = 0; i < writer.segments.size(); ++i) {
+        segment* seg = writer.segments[i];
+        std::cout << "\tSegment:";
+        for (int j = 0; j < seg->get_sections_num(); ++j) {
+            section* sec = writer.sections[seg->get_section_index_at(j)];
+            std::cout << " " << sec->get_name();
+        }
+        std::cout << "\n";
+    }
+    std::cout << "--------------------------------\n";
+}
+
+// Function to adjust the index of all sections in every segment
+// void 
+// adjust_section_indices(elfio& writer, Elf_Half base_idx)
+// {
+//     for (int i = 0; i < writer.segments.size(); ++i) {
+//         segment* seg = writer.segments[i];
+//         seg->increment_indices(base_idx);
+//     }
+// }
+
 // Function to create new section from symbols
 void 
 create_sections_from_symbols(elfio& writer, segment* target_segment, section* target_sec, symbol_section_accessor& symbols) 
@@ -85,10 +111,20 @@ create_sections_from_symbols(elfio& writer, segment* target_segment, section* ta
     Elf_Xword target_size = target_sec->get_size();
     Elf_Xword target_addr = target_sec->get_address();
 
+    // Find where the target section is in the segment
+    Elf_Half target_pos = 0;
+    for (Elf_Half i = 0; i < target_segment->get_sections_num(); ++i) {
+        section* sec = writer.sections[target_segment->get_section_index_at(i)];
+        if (sec == target_sec) {
+            target_pos = i;
+            break;
+        }
+    }
+
     // Find the symbol table section
     section* symtab = writer.sections[".symtab"];
     ELFIO::string_section_accessor str_accessor(writer.sections[symtab->get_link()]);
-
+    // Create a new section for each symbol
     for (Elf_Xword i = 0; i < symbols_list.size(); ++i) {
         const Symbol& sym = symbols_list[i];
 
@@ -107,10 +143,11 @@ create_sections_from_symbols(elfio& writer, segment* target_segment, section* ta
         // Create a new section
         std::string new_name = target_sec->get_name() + "." + sym.name;
         section* new_sec = writer.sections.add(new_name);
+        // section* new_sec = writer.sections.add_at_idx(new_name, target_sec->get_index() + i + 1);
         new_sec->set_type(target_type);
         new_sec->set_flags(target_flags);
         new_sec->set_addr_align(target_align);
-        new_sec->set_data(fn_code);
+        new_sec->set_data(fn_code); 
         new_sec->set_address(sym.value);
 
         // Add symbol mapping to the section
@@ -118,8 +155,10 @@ create_sections_from_symbols(elfio& writer, segment* target_segment, section* ta
         symbols.add_symbol(name_offset, sym.value, sym.size, sym.bind, sym.type, sym.other, new_sec->get_index());
 
         // Add the new section to the same segment as the original .text section
-        target_segment->add_section(new_sec, target_align);
+        // adjust_section_indices(writer, new_sec->get_index()); // Adjust indices to avoid conflicts
+        target_segment->insert_section(new_sec, target_align, target_pos + i + 1);
     }
+    print_sections_by_segment(writer);
 }
 
 int 
@@ -171,33 +210,44 @@ split_section(const std::string& input_path, const std::string& output_path, std
         std::cerr << "Failed to remove original section " << section_name << " from output ELF.\n";
         return 1;
     }
-
+   
     // Give final binary executable permissions
     command = "chmod +x " + output_path;
     if (std::system(command.c_str()) != 0) {
         std::cerr << "Failed to set executable permissions on output ELF.\n";
         return 1;
     }
+
+    std::system("./output");
     return 0;
 }
 
 int main(int argc, char** argv) {
     if (argc < 3) {
-        std::cerr << "Usage: ./split2 <input_elf> <output_elf>\n";
+        std::cerr << "Usage: ./splitter <input_elf> <output_elf>\n";
         return 1;
     }
 
     std::string input_path = argv[1];
     std::string output_path = argv[2];
 
-    std::vector<std::string> sections_to_split = {".text", ".data"};
+    std::vector<std::string> sections_to_split = {".data", ".text"};
     for (const auto& section : sections_to_split) {
         if (split_section(input_path, output_path, section) != 0) {
             std::cerr << "Failed to split " << section << " section.\n";
             return 1;
         }
+        input_path = output_path;  // Update input path for the next section
         symbols_list.clear();  
+        std::cout << "Successfully split section: " << section << "\n";
     }
+
+    elfio reader;
+    if (!reader.load(input_path)) {
+        std::cerr << "Failed to load ELF file: " << input_path << "\n";
+        return 1;
+    }
+    print_sections_by_segment(reader);
 
     std::cout << "Modified ELF written to " << output_path << "\n";
     return 0;

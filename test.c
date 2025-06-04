@@ -9,7 +9,7 @@ struct data {
 };
 
 int unused_var = 42;
-int used_var = 100;
+int used_var = 4095;
 
 struct data *fn1() {
     struct data *d = malloc(sizeof(struct data));

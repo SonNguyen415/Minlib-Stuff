@@ -76,7 +76,7 @@ tests:
 
 	@echo "Running Test 2: Remove main (should crash)"
 	@objcopy -R .text.main $(OUTPUT) test2
-	@./test2
+	-@./test2
 	@echo "----------------------------------"
 
 	@echo "Running Test 3: Remove unused variable section"
