@@ -69,7 +69,7 @@ tests:
 	@./test0
 	@echo "----------------------------------"
 
-	@echo "Running Test 1: Remove unused section"
+	@echo "Running Test 1: Remove unused text section"
 	@objcopy -R .text.unused $(OUTPUT) test1
 	@./test1
 	@echo "----------------------------------"
@@ -77,6 +77,17 @@ tests:
 	@echo "Running Test 2: Remove main (should crash)"
 	@objcopy -R .text.main $(OUTPUT) test2
 	@./test2
+	@echo "----------------------------------"
+
+	@echo "Running Test 3: Remove unused variable section"
+	@objcopy -R .data.unused_var $(OUTPUT) test3
+	@./test3
+	@echo "----------------------------------"
+
+	@echo "Running Test 4: Remove used global"
+	@objcopy -R .data.used_var $(OUTPUT) test4
+	@./test4
+
 
 clean:
-	rm -f $(TEST_BIN) $(SPLIT_BIN) $(PARSER_BIN) $(TXT_FILES) $(OFILES) $(OUTPUT_FILES) $(OUTPUT_LIST) test0 test1 test2
+	rm -f $(TEST_BIN) $(SPLIT_BIN) $(PARSER_BIN) $(TXT_FILES) $(OFILES) $(OUTPUT_FILES) $(OUTPUT_LIST) test0 test1 test2 test3 test4
