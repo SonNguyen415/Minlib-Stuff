@@ -13,6 +13,9 @@ PARSER_BIN = parser
 TESTER = test.py
 TEST_SRC = test.c
 TEST_BIN = test
+# Test results
+NUMS = $(shell seq 0 9)  
+TESTS = $(foreach n, $(NUMS), test$(n))
 OFILES = $(wildcard *.o)
 TXT_FILES := $(wildcard *.txt) 
 OUTPUT_LIST = .outputs
@@ -84,10 +87,20 @@ tests:
 	@./test3
 	@echo "----------------------------------"
 
-	@echo "Running Test 4: Remove used global"
+	@echo "Running Test 4: Remove used variable (shouldn't crash but var becomes junk)"
 	@objcopy -R .data.used_var $(OUTPUT) test4
-	@./test4
+	-@./test4
+	@echo "----------------------------------"
+	
+	@echo "Running Test 5: Remove unused unitialized variable"
+	@objcopy -R .bss.bss_unused $(OUTPUT) test5
+	@./test5
+	@echo "----------------------------------"
+
+	@echo "Running Test 6: Remove used bss"
+	@objcopy -R .bss.bss_var $(OUTPUT) test6
+	@./test6
 
 
 clean:
-	rm -f $(TEST_BIN) $(SPLIT_BIN) $(PARSER_BIN) $(TXT_FILES) $(OFILES) $(OUTPUT_FILES) $(OUTPUT_LIST) test0 test1 test2 test3 test4
+	rm -f $(TEST_BIN) $(SPLIT_BIN) $(PARSER_BIN) $(TXT_FILES) $(OFILES) $(OUTPUT_FILES) $(OUTPUT_LIST) $(TESTS)

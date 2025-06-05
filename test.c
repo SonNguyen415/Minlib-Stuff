@@ -10,6 +10,8 @@ struct data {
 
 int unused_var = 42;
 int used_var = 4095;
+int bss_var;
+int bss_unused;
 
 struct data *fn1() {
     struct data *d = malloc(sizeof(struct data));
@@ -33,6 +35,8 @@ int main() {
     struct data *d = fn1();
     fn2(d);
     printf("Global variable: %d\n", used_var);
+    bss_var = 100; // Initialize BSS variable
+    printf("BSS variable: %d\n", bss_var);
 
     printf("%d\n", d->a);
     return 0;

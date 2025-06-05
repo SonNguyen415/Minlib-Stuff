@@ -41,26 +41,25 @@ find_segment(elfio& reader, section* target_section)
     return target_segment;
 }
 
+
 // Function to gather symbols from the symbol table
 void 
 gather_symbols(symbol_section_accessor& symbols, section* sec) 
 {
-    Elf64_Addr addr = sec->get_address();
-    Elf_Xword size = sec->get_size();
+
+    Elf_Half section_index = sec->get_index();
 
     for (Elf_Xword i = 0; i < symbols.get_symbols_num(); ++i) {
         Symbol sym;
         symbols.get_symbol(i, sym.name, sym.value, sym.size, sym.bind, sym.type, sym.section_index, sym.other);
 
-        // Skip empty symbols
-        if (sym.name.empty()) {
+        // Skip empty symbols or symbols not in the target section
+        if (sym.name.empty() || sym.section_index != section_index) {
             continue;
         }
-
-        // Skip symbols that are not in the section
-        if (sym.value < addr || sym.value + sym.size > addr + size) {
-            continue;
-        }
+     
+        printf("Symbol: %s, Value: %lx, Size: %ld, Bind: %d, Type: %d, Section Index: %d, Other: %d\n",
+               sym.name.c_str(), sym.value, sym.size, sym.bind, sym.type, sym.section_index, sym.other);
         symbols_list.push_back(sym);
     }
 }
@@ -126,7 +125,9 @@ create_sections_from_symbols(elfio& writer, segment* target_segment, section* ta
     ELFIO::string_section_accessor str_accessor(writer.sections[symtab->get_link()]);
     // Create a new section for each symbol
     for (Elf_Xword i = 0; i < symbols_list.size(); ++i) {
+
         const Symbol& sym = symbols_list[i];
+        std::cout << "Creating section: " << sym.name << "\n";
 
         Elf_Xword size = 0;
         if (i < symbols_list.size() - 1) {
@@ -137,8 +138,13 @@ create_sections_from_symbols(elfio& writer, segment* target_segment, section* ta
             size = (target_addr + target_size) - sym.value;
         }
 
+        // For .bss section, set size to 0
+        if (target_sec->get_name() == ".bss") {
+            size = 0;
+        }
+
         Elf_Xword offset = sym.value - target_addr;
-        std::string fn_code(target_data + offset, size);
+        std::string symbol_data(target_data + offset, size);
 
         // Create a new section
         std::string new_name = target_sec->get_name() + "." + sym.name;
@@ -147,8 +153,9 @@ create_sections_from_symbols(elfio& writer, segment* target_segment, section* ta
         new_sec->set_type(target_type);
         new_sec->set_flags(target_flags);
         new_sec->set_addr_align(target_align);
-        new_sec->set_data(fn_code); 
+        new_sec->set_data(symbol_data); 
         new_sec->set_address(sym.value);
+        // new_sec->set_size(size);
 
         // Add symbol mapping to the section
         Elf_Word name_offset = str_accessor.add_string(sym.name);
@@ -158,7 +165,6 @@ create_sections_from_symbols(elfio& writer, segment* target_segment, section* ta
         // adjust_section_indices(writer, new_sec->get_index()); // Adjust indices to avoid conflicts
         target_segment->insert_section(new_sec, target_align, target_pos + i + 1);
     }
-    print_sections_by_segment(writer);
 }
 
 int 
@@ -169,6 +175,7 @@ split_section(const std::string& input_path, const std::string& output_path, std
         std::cerr << "Failed to load ELF file: " << input_path << "\n";
         return 1;
     }
+    print_sections_by_segment(reader);
 
     // Get all the symbols
     section* symtab_sec = reader.sections[".symtab"];
@@ -218,7 +225,6 @@ split_section(const std::string& input_path, const std::string& output_path, std
         return 1;
     }
 
-    std::system("./output");
     return 0;
 }
 
@@ -231,10 +237,10 @@ int main(int argc, char** argv) {
     std::string input_path = argv[1];
     std::string output_path = argv[2];
 
-    std::vector<std::string> sections_to_split = {".data", ".text"};
+    std::vector<std::string> sections_to_split = {".data", ".bss", ".text"};
     for (const auto& section : sections_to_split) {
         if (split_section(input_path, output_path, section) != 0) {
-            std::cerr << "Failed to split " << section << " section.\n";
+            std::cerr << "Failed to split " << section << " section\n";
             return 1;
         }
         input_path = output_path;  // Update input path for the next section
