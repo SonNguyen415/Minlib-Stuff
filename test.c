@@ -11,17 +11,12 @@ struct data {
 struct data unused_var = { .a = 5, .arr = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9} };
 int used_var = 4095;
 int bss_var;
-int bss_unused;
-
-// struct data global_data = {
-//     .a = 5,
-//     .arr = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
-// };
+short bss_unused;
 
 struct data *fn() {
     struct data *d = malloc(sizeof(struct data));
-    d->a = 10;
-    d->arr[0] = 10;
+    d->a = 17;
+    d->arr[0] = 13;
     return d;
 }
 
@@ -31,7 +26,7 @@ void unused_fn() {
 
 
 int main() {
-    bss_var = 100; // Initialize BSS variable
+    bss_var = 175; // Initialize BSS variable
     
     struct data * struct1 = fn();
     printf("Data a: %d\n", struct1->a);

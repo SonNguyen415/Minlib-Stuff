@@ -119,24 +119,38 @@ create_sections_from_symbols(elfio& writer, segment* target_segment, section* ta
     // Find the symbol table section
     section* symtab = writer.sections[".symtab"];
     ELFIO::string_section_accessor str_accessor(writer.sections[symtab->get_link()]);
+
     // Create a new section for each symbol
+    Elf_Half cur_idx = -1;
     for (Elf_Xword i = 0; i < symbols_list.size(); ++i) {
         const Symbol& sym = symbols_list[i];
-        Elf_Xword size = 0;
+        Elf_Sxword size = sym.size;
+
+        // Calculate size by the difference in value between consecutive symbols
         if (i < symbols_list.size() - 1) {
-            // Calculate size by the difference in value between consecutive symbols
-            size = symbols_list[i + 1].value - sym.value;
+            // We use the next symbol's value only if it's within original section's address space
+            if ( symbols_list[i + 1].value <= target_addr + target_size) {
+                size = symbols_list[i + 1].value - sym.value;
+            } else {
+                size = (target_addr + target_size) - sym.value;
+            }
         } else {
-            // For the last symbol, use the size of the remainder
             size = (target_addr + target_size) - sym.value;
         }
-
-        printf("Symbol: %s, Value: 0x%lx, Size: %lu\n", sym.name.c_str(), sym.value, size);
+        
         // For .bss section, set size to 0
         if (target_sec->get_name() == ".bss") {
             size = 0;
         }
 
+        // Edge case: TMC_END can shows up after bss section, we'll just add it as a symbol to the previous section
+        if (size < 0) {
+            Elf_Word name_offset = str_accessor.add_string(sym.name);
+            symbols.add_symbol(name_offset, sym.value, sym.size, sym.bind, sym.type, sym.other, cur_idx);
+            continue;
+        }
+
+        // Get symbol data 
         Elf_Xword offset = sym.value - target_addr;
         std::string symbol_data(target_data + offset, size);
 
@@ -147,12 +161,13 @@ create_sections_from_symbols(elfio& writer, segment* target_segment, section* ta
         new_sec->set_type(target_type);
         new_sec->set_flags(target_flags);
         new_sec->set_addr_align(target_align);
-        new_sec->set_data(symbol_data); 
         new_sec->set_address(sym.value);
+        new_sec->set_data(symbol_data); 
 
         // Add symbol mapping to the section
         Elf_Word name_offset = str_accessor.add_string(sym.name);
-        symbols.add_symbol(name_offset, sym.value, sym.size, sym.bind, sym.type, sym.other, new_sec->get_index());
+        cur_idx = new_sec->get_index();
+        symbols.add_symbol(name_offset, sym.value, sym.size, sym.bind, sym.type, sym.other, cur_idx);
 
         // Add the new section to the same segment as the original .text section
         // adjust_section_indices(writer, new_sec->get_index()); // Adjust indices to avoid conflicts
@@ -239,12 +254,13 @@ int main(int argc, char** argv) {
         symbols_list.clear();  
     }
 
-    elfio reader;
+    elfio reader;   
     if (!reader.load(input_path)) {
         std::cerr << "Failed to load ELF file: " << input_path << "\n";
         return 1;
     }
 
+    
     std::cout << "Modified ELF written to " << output_path << "\n";
     return 0;
 }
