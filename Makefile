@@ -72,8 +72,8 @@ tests:
 	@./test0
 	@echo "----------------------------------"
 
-	@echo "Running Test 1: Remove unused text section"
-	@objcopy -R .text.unused $(OUTPUT) test1
+	@echo "Running Test 1: Remove unused function"
+	@objcopy -R .text.unused_fn $(OUTPUT) test1
 	@./test1
 	@echo "----------------------------------"
 
@@ -82,25 +82,26 @@ tests:
 	-@./test2
 	@echo "----------------------------------"
 
-	@echo "Running Test 3: Remove unused variable section"
-	@objcopy -R .data.unused_var $(OUTPUT) test3
+	@echo "Running Test 3: Remove unused unintialized variable"
+	@objcopy -R .bss.bss_unused $(OUTPUT) test3
 	@./test3
 	@echo "----------------------------------"
 
-	@echo "Running Test 4: Remove used variable (shouldn't crash but var becomes junk)"
-	@objcopy -R .data.used_var $(OUTPUT) test4
-	-@./test4
+	@echo "Running Test 4: Remove used bss"
+	@objcopy -R .bss.bss_var $(OUTPUT) test4
+	@./test4
 	@echo "----------------------------------"
-	
-	@echo "Running Test 5: Remove unused unitialized variable"
-	@objcopy -R .bss.bss_unused $(OUTPUT) test5
+
+	@echo "Running Test 5: Remove unused variable section"
+	@objcopy -R .data.unused_var $(OUTPUT) test5
 	@./test5
 	@echo "----------------------------------"
 
-	@echo "Running Test 6: Remove used bss"
-	@objcopy -R .bss.bss_var $(OUTPUT) test6
-	@./test6
-
+	@echo "Running Test 6: Remove used variable (shouldn't crash but var becomes junk)"
+	@objcopy -R .data.used_var $(OUTPUT) test6
+	-@./test6
+	@echo "----------------------------------"
+	
 
 clean:
 	rm -f $(TEST_BIN) $(SPLIT_BIN) $(PARSER_BIN) $(TXT_FILES) $(OFILES) $(OUTPUT_FILES) $(OUTPUT_LIST) $(TESTS)

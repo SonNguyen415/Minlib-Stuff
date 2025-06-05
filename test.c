@@ -13,31 +13,26 @@ int used_var = 4095;
 int bss_var;
 int bss_unused;
 
-struct data *fn1() {
+struct data *fn() {
     struct data *d = malloc(sizeof(struct data));
     d->a = 10;
     d->arr[0] = 10;
     return d;
 }
 
-void fn2(struct data *d) {
-    if (d) {
-        d->a = 20;
-    }
-}
-
-void unused() {
+void unused_fn() {
     printf("Hello from fn1\n");
 }
 
+
 int main() {
-    printf("Hello, World!\n");
-    struct data *d = fn1();
-    fn2(d);
-    printf("Global variable: %d\n", used_var);
     bss_var = 100; // Initialize BSS variable
+    
+    struct data * struct1 = fn();
+    printf("Data a: %d\n", struct1->a);
+    printf("Global variable: %d\n", used_var);
     printf("BSS variable: %d\n", bss_var);
 
-    printf("%d\n", d->a);
+    free(struct1);
     return 0;
 }

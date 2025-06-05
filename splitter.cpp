@@ -57,9 +57,6 @@ gather_symbols(symbol_section_accessor& symbols, section* sec)
         if (sym.name.empty() || sym.section_index != section_index) {
             continue;
         }
-     
-        printf("Symbol: %s, Value: %lx, Size: %ld, Bind: %d, Type: %d, Section Index: %d, Other: %d\n",
-               sym.name.c_str(), sym.value, sym.size, sym.bind, sym.type, sym.section_index, sym.other);
         symbols_list.push_back(sym);
     }
 }
@@ -125,10 +122,7 @@ create_sections_from_symbols(elfio& writer, segment* target_segment, section* ta
     ELFIO::string_section_accessor str_accessor(writer.sections[symtab->get_link()]);
     // Create a new section for each symbol
     for (Elf_Xword i = 0; i < symbols_list.size(); ++i) {
-
         const Symbol& sym = symbols_list[i];
-        std::cout << "Creating section: " << sym.name << "\n";
-
         Elf_Xword size = 0;
         if (i < symbols_list.size() - 1) {
             // Calculate size by the difference in value between consecutive symbols
@@ -155,7 +149,6 @@ create_sections_from_symbols(elfio& writer, segment* target_segment, section* ta
         new_sec->set_addr_align(target_align);
         new_sec->set_data(symbol_data); 
         new_sec->set_address(sym.value);
-        // new_sec->set_size(size);
 
         // Add symbol mapping to the section
         Elf_Word name_offset = str_accessor.add_string(sym.name);
@@ -175,7 +168,6 @@ split_section(const std::string& input_path, const std::string& output_path, std
         std::cerr << "Failed to load ELF file: " << input_path << "\n";
         return 1;
     }
-    print_sections_by_segment(reader);
 
     // Get all the symbols
     section* symtab_sec = reader.sections[".symtab"];
@@ -245,7 +237,6 @@ int main(int argc, char** argv) {
         }
         input_path = output_path;  // Update input path for the next section
         symbols_list.clear();  
-        std::cout << "Successfully split section: " << section << "\n";
     }
 
     elfio reader;
@@ -253,7 +244,6 @@ int main(int argc, char** argv) {
         std::cerr << "Failed to load ELF file: " << input_path << "\n";
         return 1;
     }
-    print_sections_by_segment(reader);
 
     std::cout << "Modified ELF written to " << output_path << "\n";
     return 0;
