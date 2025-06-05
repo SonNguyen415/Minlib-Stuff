@@ -48,7 +48,6 @@ gather_symbols(symbol_section_accessor& symbols, section* sec)
 {
 
     Elf_Half section_index = sec->get_index();
-
     for (Elf_Xword i = 0; i < symbols.get_symbols_num(); ++i) {
         Symbol sym;
         symbols.get_symbol(i, sym.name, sym.value, sym.size, sym.bind, sym.type, sym.section_index, sym.other);
@@ -132,6 +131,7 @@ create_sections_from_symbols(elfio& writer, segment* target_segment, section* ta
             size = (target_addr + target_size) - sym.value;
         }
 
+        printf("Symbol: %s, Value: 0x%lx, Size: %lu\n", sym.name.c_str(), sym.value, size);
         // For .bss section, set size to 0
         if (target_sec->get_name() == ".bss") {
             size = 0;
