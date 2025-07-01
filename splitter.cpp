@@ -42,6 +42,30 @@ find_segment(elfio& reader, section* target_section)
 }
 
 
+section * 
+find_next_section(elfio& reader, section* target_section) 
+{
+    /* 
+     * We can't rely on section indices being in order, so we need to find the next section
+     * via the addresses. We'll find the section that has the lowest address greater than
+     * the target section's address.
+     */
+    Elf64_Addr target_addr = target_section->get_address();
+    Elf64_Addr min_addr = UINT64_MAX;
+    section* next_section = nullptr;
+    for (int i = 0; i < reader.sections.size(); ++i) {
+        section* sec = reader.sections[i];
+        if (sec == target_section) continue; // Skip the target section
+        Elf64_Addr sec_addr = sec->get_address();
+        if (sec_addr > target_addr && sec_addr < min_addr) {
+            min_addr = sec_addr;
+            next_section = sec;
+        }
+    }
+
+    return next_section; 
+}
+
 // Function to gather symbols from the symbol table
 void 
 gather_symbols(symbol_section_accessor& symbols, section* sec) 
@@ -85,16 +109,6 @@ print_sections_by_segment(elfio& writer)
     std::cout << "--------------------------------\n";
 }
 
-// Function to adjust the index of all sections in every segment
-// void 
-// adjust_section_indices(elfio& writer, Elf_Half base_idx)
-// {
-//     for (int i = 0; i < writer.segments.size(); ++i) {
-//         segment* seg = writer.segments[i];
-//         seg->increment_indices(base_idx);
-//     }
-// }
-
 // Function to create new section from symbols
 void 
 create_sections_from_symbols(elfio& writer, segment* target_segment, section* target_sec, symbol_section_accessor& symbols) 
@@ -120,6 +134,9 @@ create_sections_from_symbols(elfio& writer, segment* target_segment, section* ta
     section* symtab = writer.sections[".symtab"];
     ELFIO::string_section_accessor str_accessor(writer.sections[symtab->get_link()]);
 
+    // Find the next section after the target section
+    section* next_sec = find_next_section(writer, target_sec);
+
     // Create a new section for each symbol
     for (Elf_Xword i = 0; i < symbols_list.size(); ++i) {
         const Symbol& sym = symbols_list[i];
@@ -127,15 +144,13 @@ create_sections_from_symbols(elfio& writer, segment* target_segment, section* ta
         Elf64_Addr addr = sym.value;
 
         // Calculate size by the difference in value between consecutive symbols
-        if (i < symbols_list.size() - 1) {
-            // We use the next symbol's value only if it's within original section's address space
-            if ( symbols_list[i + 1].value <= target_addr + target_size) {
-                size = symbols_list[i + 1].value - addr;
-            } else {
-                size = (target_addr + target_size) - addr;
-            }
+        // We use the next symbol's value only if it's within original section's address space
+        if (i < symbols_list.size() - 1 && symbols_list[i + 1].value <= target_addr + target_size) {
+            size = symbols_list[i + 1].value - addr;
+        } else if (next_sec) {
+            size = next_sec->get_address() - addr;
         } else {
-            size = (target_addr + target_size) - addr;
+            size = target_addr + target_size - addr;
         }
         
         // For .bss section, set size to 0
@@ -157,7 +172,6 @@ create_sections_from_symbols(elfio& writer, segment* target_segment, section* ta
         // Create a new section
         std::string new_name = target_sec->get_name() + "." + sym.name;
         section* new_sec = writer.sections.add(new_name);
-        // section* new_sec = writer.sections.add_at_idx(new_name, target_sec->get_index() + i + 1);
         new_sec->set_type(target_type);
         new_sec->set_flags(target_flags);
         new_sec->set_addr_align(target_align);
@@ -171,6 +185,9 @@ create_sections_from_symbols(elfio& writer, segment* target_segment, section* ta
         // Add the new section to the same segment as the original .text section
         // adjust_section_indices(writer, new_sec->get_index()); // Adjust indices to avoid conflicts
         target_segment->insert_section(new_sec, target_align, target_pos + i + 1);
+
+        // Mark section as split
+        target_sec->is_split = true;
     }
 }
 
@@ -182,7 +199,7 @@ split_section(const std::string& input_path, const std::string& output_path, std
         std::cerr << "Failed to load ELF file: " << input_path << "\n";
         return 1;
     }
-
+    
     // Get all the symbols
     section* symtab_sec = reader.sections[".symtab"];
     if (symtab_sec == nullptr) {
@@ -207,7 +224,7 @@ split_section(const std::string& input_path, const std::string& output_path, std
     // Gather and sort symbols
     gather_symbols(symbols, target_sec);
     sort_symbols_by_value();
-
+    
     // Create new sections from symbols
     create_sections_from_symbols(reader, target_segment, target_sec, symbols);
 
@@ -242,9 +259,10 @@ int main(int argc, char** argv) {
 
     std::string input_path = argv[1];
     std::string output_path = argv[2];
-
-    // FIXME: Splitting currently have to be done in order of sections ordering, but reverse ordering of segments.
-    std::vector<std::string> sections_to_split = {".data", ".bss", ".text"};
+    
+    // FIXME: .text have to split last rn for some weird reason
+    // FIXME: .rodata new sections get moved to a new segment after objcopy removes original section
+    std::vector<std::string> sections_to_split = {".rodata", ".data", ".bss", ".text"};
     for (const auto& section : sections_to_split) {
         if (split_section(input_path, output_path, section) != 0) {
             std::cerr << "Failed to split " << section << " section\n";

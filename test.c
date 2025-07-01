@@ -12,6 +12,8 @@ struct data unused_var = { .a = 5, .arr = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9} };
 int used_var = 4095;
 int bss_var;
 short bss_unused;
+const short const_var = 42; 
+const int unused_const_var = 3485;
 
 struct data *fn() {
     struct data *d = malloc(sizeof(struct data));
@@ -30,9 +32,10 @@ int main() {
     
     struct data * struct1 = fn();
     printf("Data a: %d\n", struct1->a);
-    printf("Global variable: %d\n", used_var);
     printf("BSS variable: %d\n", bss_var);
-
+    printf("Global variable: %d\n", used_var);
+    printf("Const variable: %d\n", const_var);
+    
     free(struct1);
     return 0;
 }
