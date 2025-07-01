@@ -10,7 +10,6 @@ PARSER_SRC = parser.cpp
 PARSER_BIN = parser
 
 # Test Files
-TESTER = test.py
 TEST_SRC = test.c
 TEST_BIN = test
 # Test results
