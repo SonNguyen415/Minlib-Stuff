@@ -95,7 +95,6 @@ create_relo(elfio& writer, section* original_sec, section* new_sec, Elf64_Addr s
                     }
                     rel_writer.add_entry(new_offset, reloc_symbol_idx, reloc_entry.type, reloc_entry.addend);
                 }
-
             }
         }
     }
