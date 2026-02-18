@@ -66,7 +66,6 @@ void
 create_relo(elfio& writer, section* original_sec, section* new_sec, Elf64_Addr sym_offset)
 {
 
-    printf("Processing: %s\n", new_sec->get_name().c_str());
     // Create new relocation section
     for (int i = 0; i < writer.sections.size(); ++i) {
         section* sec = writer.sections[i];
@@ -91,7 +90,6 @@ create_relo(elfio& writer, section* original_sec, section* new_sec, Elf64_Addr s
                 if (reloc_entry.offset >= sym_offset && reloc_entry.offset < sym_offset + new_sec->get_size()) {
                     Elf64_Addr new_offset = reloc_entry.offset - sym_offset; // Adjust offset for the new section
                     Elf_Word reloc_symbol_idx = reloc_entry.symbol;
-                    printf("Reloc entry: offset=0x%lx, symbol=%u, type=%u, addend=%ld\n", reloc_entry.offset, reloc_entry.symbol, reloc_entry.type, reloc_entry.addend);
                     if (symbol_mapping.find(reloc_symbol_idx) != symbol_mapping.end()) { 
                         reloc_symbol_idx = symbol_mapping[reloc_symbol_idx]; // Update symbol index to the new symbol
                     }
@@ -101,7 +99,6 @@ create_relo(elfio& writer, section* original_sec, section* new_sec, Elf64_Addr s
             }
         }
     }
-    printf("-----------------------------------------------------------------------------------------------\n");
 }
 
 
@@ -127,8 +124,6 @@ create_sections_from_symbols(elfio& writer, section* original_sec, symbol_sectio
         const Symbol& sym = symbols_list[i];
         Elf_Sxword size = sym.size;
         Elf64_Addr sym_offset = sym.value; // Offset of the symbol relative to the section's address
-        // Get symbol data 
-        // printf("Get offset: 0x%lx, sym_offset: 0x%lx, target_offset: 0x%lx\n", offset, sym_offset, target_offset);
         std::string symbol_data(target_data + sym_offset, size);
 
         // Create a new section
@@ -143,8 +138,6 @@ create_sections_from_symbols(elfio& writer, section* original_sec, symbol_sectio
         new_sec->set_addr_align(target_align);
         new_sec->set_address(0); // Object files won't need this, linker can decide
         new_sec->set_data(symbol_data); 
-
-        printf("Symbol: %s, Idx: %u\n", sym.name.c_str(), sym.idx);
 
         // Add symbol mapping to the section
         Elf_Word name_offset = str_accessor.add_string(sym.name);
@@ -206,8 +199,6 @@ int main(int argc, char** argv) {
     std::string input_path = argv[1];
     std::string output_path = argv[2];
     
-    // FIXME: .text have to split last rn for some weird reason
-    // FIXME: .rodata new sections get moved to a new segment after objcopy removes original section
     std::vector<std::string> sections_to_split = {".text"};
     for (const auto& section : sections_to_split) {
         if (split_section(input_path, output_path, section) != 0) {
