@@ -22,6 +22,13 @@ struct data *fn() {
     return d;
 }
 
+int fn2(int a, int b) {
+    if (a > b) {
+        return a - b;
+    }
+    return a + b;
+}
+
 void unused_fn() {
     printf("Hello from fn1\n");
 }
@@ -31,6 +38,7 @@ int main() {
     bss_var = 175; // Initialize BSS variable
     
     struct data * struct1 = fn();
+    int result = fn2(10, 5);
     printf("Data a: %d\n", struct1->a);
     printf("BSS variable: %d\n", bss_var);
     printf("Global variable: %d\n", used_var);

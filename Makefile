@@ -1,5 +1,5 @@
 # Compiler settings
-CC = gcc 
+CC = gcc
 CXX = g++
 CXXFLAGS = -std=c++17 -Iexternal/ELFIO
 
@@ -20,7 +20,7 @@ TXT_FILES := $(wildcard *.txt)
 OUTPUT_LIST = .outputs
 OUTPUT_FILES := $(shell cat $(OUTPUT_LIST) 2>/dev/null)
 
-.PHONY: all run clean dump tests
+.PHONY: all run clean dump tests object
 
 all: $(TEST_BIN) $(SPLIT_BIN)
 
@@ -37,12 +37,15 @@ $(SPLIT_BIN): $(SPLIT_SRC)
 $(PARSER_BIN): $(PARSER_SRC)
 	$(CXX) $(CXXFLAGS) -o $@ $<
 
+object:
+	$(CC) -c $(TEST_SRC) -o $(TEST_BIN).o 
+
 dump:
 	@if [ -z "$(BIN)" ]; then \
 		echo "Usage: make dump BIN=binary"; \
 		exit 1; \
 	fi
-	objdump -SRThrtpsz $(BIN) > $(BIN).txt
+	objdump -SThrtpsz $(BIN) > $(BIN).txt
 
 # Compile the splitter and run it on a given binary, we'll also keep track of the output files if we need to remove them later
 run: $(SPLIT_BIN)
@@ -101,6 +104,13 @@ tests:
 	-@./test6
 	@echo "----------------------------------"
 	
+help: 
+	@echo "Makefile Usage:"
+	@echo "  make                              - Compile the test and splitter binaries."
+	@echo "  make run BIN=binary OUTPUT=output - Run the splitter on the specified binary and output to the specified file."
+	@echo "  make tests OUTPUT=output          - Run a series of tests on the specified output binary."
+	@echo "  make dump BIN=binary              - Dump the contents of the specified binary to a text file."
+	@echo "  make clean                        - Clean up generated binaries and files."
 
 clean:
 	rm -f $(TEST_BIN) $(SPLIT_BIN) $(PARSER_BIN) $(TXT_FILES) $(OFILES) $(OUTPUT_FILES) $(OUTPUT_LIST) $(TESTS)

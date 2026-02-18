@@ -24,3 +24,7 @@ make run BIN=<input_binary> OUTPUT=<output_binary>
 ```
 
 The tests use a binary in `test.c`. To run the tests, run `make test OUTPUT=<output_binary>` after you've splitted the binary via `make run` as above.
+
+## Logs
+1. Relocation not added to new sections
+2. `.data` also can't be deleted via `objdump` does it also have `rela`??? Yes it does
