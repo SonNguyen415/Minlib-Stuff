@@ -11,7 +11,8 @@ PARSER_BIN = parser
 
 # Test Files
 TEST_SRC = test.c
-TEST_BIN = test
+TEST_OBJ = test.o
+
 # Test results
 NUMS = $(shell seq 0 9)  
 TESTS = $(foreach n, $(NUMS), test$(n))
@@ -22,23 +23,22 @@ OUTPUT_FILES := $(shell cat $(OUTPUT_LIST) 2>/dev/null)
 
 .PHONY: all run clean dump tests object
 
-all: $(TEST_BIN) $(SPLIT_BIN)
+all: $(TEST_OBJ) $(SPLIT_BIN)
 
 # Compile the test file
-$(TEST_BIN): $(TEST_SRC)
-	$(CC) -o $@ $<
+$(TEST_OBJ): $(TEST_SRC)
+	$(CC) -O0 -c $< $@ 
 
 # Compile the splitter
 $(SPLIT_BIN): $(SPLIT_SRC)
 	$(CXX) $(CXXFLAGS) -o $@ $<
-
 
 # Compile the splitter
 $(PARSER_BIN): $(PARSER_SRC)
 	$(CXX) $(CXXFLAGS) -o $@ $<
 
 object:
-	$(CC) -c $(TEST_SRC) -o $(TEST_BIN).o 
+	$(CC) -c $(TEST_SRC) -o $(TEST_OBJ)
 
 dump:
 	@if [ -z "$(BIN)" ]; then \
@@ -49,11 +49,11 @@ dump:
 
 # Compile the splitter and run it on a given binary, we'll also keep track of the output files if we need to remove them later
 run: $(SPLIT_BIN)
-	@if [ -z "$(BIN)" ] || [ -z "$(OUTPUT)" ]; then \
-		echo "Usage: make run BIN=binary OUTPUT=output"; \
+	@if [ -z "$(INPUT)" ] || [ -z "$(OUTPUT)" ]; then \
+		echo "Usage: make run INPUT=<object> OUTPUT=<object>"; \
 		exit 1; \
 	fi
-	@./$(SPLIT_BIN) $(BIN) $(OUTPUT)
+	@./$(SPLIT_BIN) $(INPUT) $(OUTPUT)
 	@echo $(OUTPUT) >> $(OUTPUT_LIST)
 	@sort -u $(OUTPUT_LIST) -o $(OUTPUT_LIST)
 
@@ -106,11 +106,10 @@ tests:
 	
 help: 
 	@echo "Makefile Usage:"
-	@echo "  make                              - Compile the test and splitter binaries."
-	@echo "  make run BIN=binary OUTPUT=output - Run the splitter on the specified binary and output to the specified file."
-	@echo "  make tests OUTPUT=output          - Run a series of tests on the specified output binary."
-	@echo "  make dump BIN=binary              - Dump the contents of the specified binary to a text file."
-	@echo "  make clean                        - Clean up generated binaries and files."
+	@echo "  make                                    - Compile the test and splitter binaries."
+	@echo "  make run INPUT=<object> OUTPUT=<object> - Run the splitter on the specified object and output to the specified file (both obj)."
+	@echo "  make dump BIN=<binary>                  - Dump the contents of the specified binary to a text file."
+	@echo "  make clean                              - Clean up generated binaries and files."
 
 clean:
-	rm -f $(TEST_BIN) $(SPLIT_BIN) $(PARSER_BIN) $(TXT_FILES) $(OFILES) $(OUTPUT_FILES) $(OUTPUT_LIST) $(TESTS)
+	rm -f $(TEST_OBJ) $(SPLIT_BIN) $(PARSER_BIN) $(TXT_FILES) $(OFILES) $(OUTPUT_FILES) $(OUTPUT_LIST) $(TESTS)
