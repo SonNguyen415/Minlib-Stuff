@@ -100,6 +100,12 @@ create_relo(elfio& writer, section* original_sec, section* new_sec, Elf64_Addr s
     }
 }
 
+void
+zero_out_original_section(section* sec) 
+{
+    std::string empty_data(sec->get_size(), '\0');
+    sec->set_data(empty_data);
+}
 
 // Function to create new section from symbols
 void 
@@ -148,6 +154,46 @@ create_sections_from_symbols(elfio& writer, section* original_sec, symbol_sectio
 
 }
 
+
+int 
+localize_symbols(const std::string& input_path, std::string section_name) 
+{
+    elfio reader;
+    if (!reader.load(input_path)) {
+        std::cerr << "Failed to load ELF file: " << input_path << "\n";
+        return 1;
+    }
+
+    // Get all the symbols
+    section* symtab_sec = reader.sections[".symtab"];
+    if (symtab_sec == nullptr) {
+        std::cerr << "No symbol table section found.\n";
+        return 1;
+    }
+    symbol_section_accessor symbols = symbol_section_accessor(reader, symtab_sec);
+
+    // Find the section by name
+    section* original_sec = reader.sections[section_name];
+    if (original_sec == nullptr) {
+        std::cerr << "Section " << section_name << " not found.\n";
+        return 1;
+    }
+
+    // Gather and sort symbols
+    gather_symbols(symbols, original_sec);
+    sort_symbols_by_value();
+
+    for (const auto& sym : symbols_list) {
+        std::string command = "objcopy --localize-symbol=" + sym.name + " " + input_path;
+        if (std::system(command.c_str()) != 0) {
+            std::cerr << "Failed to localize symbol " << sym.name << " from " << input_path << ".\n";
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
 int 
 split_section(const std::string& input_path, const std::string& output_path, std::string section_name) 
 {
@@ -178,14 +224,12 @@ split_section(const std::string& input_path, const std::string& output_path, std
 
     // Create new sections from symbols
     create_sections_from_symbols(reader, original_sec, symbols);
-
-    std::cout << "Section " << section_name << " split completed.\n";   
-    //  // Save the modified ELF
+    
+    // Save the modified ELF
     if (!reader.save(output_path)) {
         std::cerr << "Failed to save output ELF to " << output_path << "\n";
         return 1;
     }
-
     return 0;
 }
 
@@ -200,6 +244,10 @@ int main(int argc, char** argv) {
     
     std::vector<std::string> sections_to_split = {".text"};
     for (const auto& section : sections_to_split) {
+        if (localize_symbols(input_path, section) != 0) {
+            std::cerr << "Failed to localize symbols in " << section << " section\n";
+            return 1;
+        }
         if (split_section(input_path, output_path, section) != 0) {
             std::cerr << "Failed to split " << section << " section\n";
             return 1;
@@ -212,12 +260,14 @@ int main(int argc, char** argv) {
         if (section == ".text") {
             command = "objcopy -R " + section + " -R .rela." + section +
                             " -R .eh_frame -R .rela.eh_frame " + output_path;
+            command = "objcopy --update-section .text=onebyte.bin " + output_path;
         }
        
         if (std::system(command.c_str()) != 0) {
             std::cerr << "Failed to remove original section " << section << " from output ELF.\n";
             return 1;
         }
+       
     }
 
     std::cout << "Modified ELF written to " << output_path << "\n";
