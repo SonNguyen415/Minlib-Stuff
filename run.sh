@@ -1,28 +1,61 @@
 #!/bin/bash
-# This script scans all files in /sbin and runs objdump -t on each executable file.
-# This is meant to check if the files are stripped or not, and to filter out files that do not contain symbols.
 
-# Directory to scan
-BIN_DIR="."
+DIR="libssl"
 
-# Loop through all files in /usr/bin
-for file in "$BIN_DIR"/*; do
+make splitter
 
-    echo -ne "\r$file                   "
-    
-    # Skip if not a regular file or not executable
-    [ -f "$file" ] || continue
-    [ -x "$file" ] || continue
+total=0
+success=0
+failure=0
 
-    # Run objdump -t and capture both stdout and stderr
-    output=$(objdump -t "$file" 2>&1)
+for file in $(ls "$DIR"/*.o 2>/dev/null | sort); do
+    ((total++))
 
-    # Check if output contains error or 'no symbols'
-    if echo "$output" | grep -q -i -e 'no symbols' -e 'file format not recognized' -e 'objdump:'; then
+    base="${file%.o}"   # Remove .o extension
+    stage1="${base}_1.o"
+    stage2="${base}_2.o"
+    stage3="${base}_3.o"
+    stage4="${base}_4.o"
+
+    # Step 1: splitter → stage1
+    if ! ./splitter "$file" "$stage1"; then
+        echo "FAILED at splitter: $file"
+        ((failure++))
+        echo "------------------------------------------------------------------"
         continue
     fi
 
-    # If passed the checks, print the filename
-    echo "Success: $file"
+    # Step 2: python3 reorder.py → stage2
+    if ! python3 reorder.py "$stage1" "$stage2"; then
+        echo "FAILED at python3 reorder.py: $file"
+        ((failure++))
+        rm -f "$stage1"
+        echo "------------------------------------------------------------------"
+        continue
+    fi
+
+    # Step 3: python3 update.py → stage3
+    if ! python3 update.py "$stage2" "$stage3"; then
+        echo "FAILED at python3 update.py: $file"
+        ((failure++))
+        rm -f "$stage1" "$stage2"
+        echo "------------------------------------------------------------------"
+        continue
+    fi
+
+    # Step 4: objcopy → stage4
+    if ! objcopy -R .text -R .rela.text -R .eh_frame -R .rela.eh_frame "$stage3" "$stage4"; then
+        echo "FAILED at objcopy: $file"
+        ((failure++))
+        rm -f "$stage1" "$stage2" "$stage3"
+        echo "------------------------------------------------------------------"
+        continue
+    fi
+
+    ((success++))
 done
-echo ""
+
+echo "==================== RESULT ===================="
+echo "Total files    : $total"
+echo "Total success  : $success"
+echo "Total failures : $failure"
