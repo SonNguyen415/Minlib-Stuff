@@ -85,6 +85,7 @@ create_relo(elfio& writer, section* original_sec, section* new_sec, Elf64_Addr s
             relocation_section_accessor rel_accessor(writer, sec);
             RelocEntry reloc_entry;
 
+            // For each entry in the original relocation section, check if it applies to the new section and if so, add a corresponding entry to the new relocation section
             for (Elf_Xword j = 0; j < rel_accessor.get_entries_num(); ++j) {
                 rel_accessor.get_entry(j, reloc_entry.offset, reloc_entry.symbol, reloc_entry.type, reloc_entry.addend);
                 if (reloc_entry.offset >= sym_offset && reloc_entry.offset < sym_offset + new_sec->get_size()) {
@@ -153,14 +154,7 @@ split_section(const std::string& input_path, const std::string& output_path, std
         std::cerr << "Failed to load ELF file: " << input_path << "\n";
         return 1;
     }
-    
-    // Get all the symbols
-    section* symtab_sec = reader.sections[".symtab"];
-    if (symtab_sec == nullptr) {
-        std::cerr << "No symbol table section found.\n";
-        return 1;
-    }
-    symbol_section_accessor symbols = symbol_section_accessor(reader, symtab_sec);
+
 
     // Find the section by name
     section* original_sec = reader.sections[section_name];
@@ -168,6 +162,20 @@ split_section(const std::string& input_path, const std::string& output_path, std
         std::cerr << "Section " << section_name << " not found.\n";
         return 1;
     }
+
+    // If the section size is 0, just return
+    if (original_sec->get_size() == 0) {
+        std::cerr << "Section " << section_name << " has size 0, skipping.\n";
+        return 2;
+    }
+
+    // Get all the symbols
+    section* symtab_sec = reader.sections[".symtab"];
+    if (symtab_sec == nullptr) {
+        std::cerr << "No symbol table section found.\n";
+        return 1;
+    }
+    symbol_section_accessor symbols = symbol_section_accessor(reader, symtab_sec);
 
     // Gather and sort symbols
     gather_symbols(symbols, original_sec);
@@ -195,9 +203,12 @@ int main(int argc, char** argv) {
     
     std::vector<std::string> sections_to_split = {".text"};
     for (const auto& section : sections_to_split) {
-        if (split_section(input_path, output_path, section) != 0) {
+        int ret = split_section(input_path, output_path, section);
+        if (ret == 1) {
             std::cerr << "Failed to split " << section << " section\n";
             return 1;
+        } else if (ret == 2) {
+            std::cout << "No need to split empty section";
         }
         input_path = output_path;  // Update input path for the next section
         symbols_list.clear();  

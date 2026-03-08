@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import sys
 import shutil
 import struct
@@ -67,10 +65,15 @@ def find_target_function(addr, old_funcs):
         if start <= addr < end:
             return f, addr - start
 
-    # Case 2: in a gap, use next function with negative addend
+    # Case 2: in a gap before a later function
     for f in old_funcs:
         if addr < f["start"]:
             return f, addr - f["start"]
+
+    # Case 3: after the last function, use the last function
+    if old_funcs:
+        last = old_funcs[-1]
+        return last, addr - last["start"]
 
     return None, None
 
