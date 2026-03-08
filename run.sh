@@ -1,8 +1,6 @@
 #!/bin/bash
 
-# ar x libssl.a
-
-DIR="libssl"
+DIR="libcrypto"
 
 make splitter
 
@@ -10,18 +8,23 @@ total=0
 success=0
 failure=0
 
-
 for file in $(ls "$DIR"/*.o 2>/dev/null | sort); do
     ((total++))
 
     base="${file%.o}"   # Remove .o extension
-    stage1="${base}1.o"
-    stage2="${base}2.o"
-    stage3="${base}3.o"
-    stage4="${base}4.o"
+    stage1="${base}_1.o"
+    stage2="${base}_2.o"
+    stage3="${base}_3.o"
+    stage4="${base}_4.o"
 
     # Step 1: splitter → stage1
-    if ! ./splitter "$file" "$stage1"; then
+    ./splitter "$file" "$stage1"
+    exit_code=$?
+    if [[ $exit_code -eq 2 ]]; then
+        # Exit code 2: no need to split, skip to next file
+        ((success++))
+        continue
+    elif [[ $exit_code -ne 0 ]]; then
         echo "FAILED at splitter: $file"
         ((failure++))
         echo "------------------------------------------------------------------"
@@ -52,7 +55,7 @@ for file in $(ls "$DIR"/*.o 2>/dev/null | sort); do
         continue
     fi
 
-    rm -f "$stage1" "$stage2" "$stage3"
+    rm -f "$file" "$stage1" "$stage2" "$stage3" 
     ((success++))
 done
 

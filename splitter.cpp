@@ -155,7 +155,6 @@ split_section(const std::string& input_path, const std::string& output_path, std
         return 1;
     }
 
-
     // Find the section by name
     section* original_sec = reader.sections[section_name];
     if (original_sec == nullptr) {
@@ -165,7 +164,6 @@ split_section(const std::string& input_path, const std::string& output_path, std
 
     // If the section size is 0, just return
     if (original_sec->get_size() == 0) {
-        std::cerr << "Section " << section_name << " has size 0, skipping.\n";
         return 2;
     }
 
@@ -208,24 +206,10 @@ int main(int argc, char** argv) {
             std::cerr << "Failed to split " << section << " section\n";
             return 1;
         } else if (ret == 2) {
-            std::cout << "No need to split empty section";
+            return 2;
         }
         input_path = output_path;  // Update input path for the next section
         symbols_list.clear();  
     }
-    // for (const auto& section : sections_to_split) {
-    //     std::string command = "objcopy -R " + section + " " + output_path;
-    //     if (section == ".text") {
-    //         // command = "objcopy -R " + section + " -R .rela." + section +
-    //         //                 " -R .eh_frame -R .rela.eh_frame " + output_path;
-    //         command = "objcopy --update-section .text=onebyte.bin " + output_path;
-    //     }
-       
-    //     if (std::system(command.c_str()) != 0) {
-    //         std::cerr << "Failed to remove original section " << section << " from output ELF.\n";
-    //         return 1;
-    //     }
-       
-    // }
     return 0;
 }

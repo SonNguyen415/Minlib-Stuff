@@ -1,3 +1,4 @@
+
 import sys
 import shutil
 import struct
@@ -20,39 +21,54 @@ def find_symtab(elf):
     return symtab
 
 
-def find_old_text_section_symbol(symtab, old_text_idx):
+def load_symbols(symtab):
+    syms = []
     for i, sym in enumerate(symtab.iter_symbols()):
-        if sym["st_info"]["type"] == "STT_SECTION" and sym["st_shndx"] == old_text_idx:
-            return i
+        syms.append({
+            "index": i,
+            "name": sym.name,
+            "type": sym["st_info"]["type"],
+            "bind": sym["st_info"]["bind"],
+            "shndx": sym["st_shndx"],
+            "value": sym["st_value"],
+            "size": sym["st_size"],
+        })
+    return syms
+
+
+def find_old_text_section_symbol(symbols, old_text_idx):
+    for s in symbols:
+        if s["type"] == "STT_SECTION" and s["shndx"] == old_text_idx:
+            return s["index"]
     raise Exception("Cannot find old .text section symbol")
 
 
-def collect_old_functions(symtab, old_text_idx):
+def collect_old_functions(symbols, old_text_idx):
     funcs = []
-    for i, sym in enumerate(symtab.iter_symbols()):
-        if sym["st_info"]["type"] == "STT_FUNC" and sym["st_shndx"] == old_text_idx:
+    for s in symbols:
+        if s["type"] == "STT_FUNC" and s["shndx"] == old_text_idx:
             funcs.append({
-                "index": i,
-                "name": sym.name,
-                "start": sym["st_value"],
-                "size": sym["st_size"],
+                "index": s["index"],
+                "name": s["name"],
+                "start": s["value"],
+                "size": s["size"],
             })
     funcs.sort(key=lambda x: x["start"])
     return funcs
 
 
-def collect_new_functions(symtab, old_text_idx):
+def collect_new_functions(symbols, old_text_idx):
     new_funcs = {}
-    for i, sym in enumerate(symtab.iter_symbols()):
-        if sym["st_info"]["type"] == "STT_FUNC" and sym["st_shndx"] != old_text_idx:
-            if sym.name not in new_funcs:
-                new_funcs[sym.name] = []
-            new_funcs[sym.name].append({
-                "index": i,
-                "name": sym.name,
-                "start": sym["st_value"],
-                "size": sym["st_size"],
-                "shndx": sym["st_shndx"],
+    for s in symbols:
+        if s["type"] == "STT_FUNC" and s["shndx"] != old_text_idx:
+            if s["name"] not in new_funcs:
+                new_funcs[s["name"]] = []
+            new_funcs[s["name"]].append({
+                "index": s["index"],
+                "name": s["name"],
+                "start": s["value"],
+                "size": s["size"],
+                "shndx": s["shndx"],
             })
     return new_funcs
 
@@ -118,10 +134,15 @@ def main():
         elf = ELFFile(fp)
         symtab = find_symtab(elf)
         old_text_idx = find_text_section_index(elf)
-        old_text_sym_idx = find_old_text_section_symbol(symtab, old_text_idx)
 
-        old_funcs = collect_old_functions(symtab, old_text_idx)
-        new_funcs = collect_new_functions(symtab, old_text_idx)
+        symbols = load_symbols(symtab)
+        old_text_sym_idx = find_old_text_section_symbol(symbols, old_text_idx)
+        old_funcs = collect_old_functions(symbols, old_text_idx)
+        new_funcs = collect_new_functions(symbols, old_text_idx)
+
+        old_func_by_index = {}
+        for f in old_funcs:
+            old_func_by_index[f["index"]] = f
 
         for sec in elf.iter_sections():
             if not isinstance(sec, RelocationSection):
@@ -140,36 +161,58 @@ def main():
                 rel_type = rel["r_info_type"]
                 addend = rel["r_addend"]
 
-                if sym_idx != old_text_sym_idx:
+                # Case 1: old .text section symbol
+                if sym_idx == old_text_sym_idx:
+                    old_addr = addend
+
+                    owner, new_addend = find_target_function(old_addr, old_funcs)
+                    if owner is None:
+                        print(f"  skip rel#{rel_index}: .text+0x{old_addr:x} cannot map to any function")
+                        continue
+
+                    new_func = find_new_function_symbol(owner, new_funcs)
+                    if new_func is None:
+                        print(f"  skip rel#{rel_index}: no new symbol for {owner['name']}")
+                        continue
+
+                    # print(
+                    #     f"  patch rel#{rel_index}: "
+                    #     f".text+0x{old_addr:x} -> {new_func['name']} {new_addend:+#x}"
+                    # )
+
+                    patch_rela_entry(
+                        fp,
+                        relsec_offset,
+                        rel_index,
+                        entsize,
+                        new_func["index"],
+                        rel_type,
+                        new_addend
+                    )
                     continue
 
-                old_addr = addend
+                # Case 2: old function symbol in old .text
+                if sym_idx in old_func_by_index:
+                    old_func = old_func_by_index[sym_idx]
+                    new_func = find_new_function_symbol(old_func, new_funcs)
+                    if new_func is None:
+                        print(f"  skip rel#{rel_index}: no new symbol for {old_func['name']}")
+                        continue
 
-                owner, new_addend = find_target_function(old_addr, old_funcs)
-                if owner is None:
-                    print(f"  skip rel#{rel_index}: .text+0x{old_addr:x} cannot map to any function")
-                    continue
+                    # print(
+                    #     f"  patch rel#{rel_index}: "
+                    #     f"{old_func['name']} {addend:+#x} -> {new_func['name']} {addend:+#x}"
+                    # )
 
-                new_func = find_new_function_symbol(owner, new_funcs)
-                if new_func is None:
-                    print(f"  skip rel#{rel_index}: no new symbol for {owner['name']}")
-                    continue
-
-                # print(
-                #     f"  patch rel#{rel_index}: "
-                #     f".text+0x{old_addr:x} -> {new_func['name']} "
-                #     f"{new_addend:+#x}"
-                # )
-
-                patch_rela_entry(
-                    fp,
-                    relsec_offset,
-                    rel_index,
-                    entsize,
-                    new_func["index"],
-                    rel_type,
-                    new_addend
-                )
+                    patch_rela_entry(
+                        fp,
+                        relsec_offset,
+                        rel_index,
+                        entsize,
+                        new_func["index"],
+                        rel_type,
+                        addend
+                    )
 
 
 if __name__ == "__main__":
