@@ -48,4 +48,4 @@ fi
 # Cleanup intermediate files
 rm -f "$stage1" "$stage2" "$stage3"
 
-echo "Processing completed successfully: $output"
+echo "Splitting successful: $output"
