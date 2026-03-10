@@ -1,65 +1,51 @@
 #!/bin/bash
 
-DIR="libcrypto"
+if [[ $# -ne 2 ]]; then
+    echo "Usage: $0 <file.o> <output.o>"
+    exit 1
+fi
 
-make splitter
+file="$1"
+output="$2"
 
-total=0
-success=0
-failure=0
+# Make sure splitter is built
+make splitter || { echo "Failed to build splitter"; exit 1; }
 
-for file in $(ls "$DIR"/*.o 2>/dev/null | sort); do
-    ((total++))
+base="${file%.o}"   # Remove .o extension
+stage1="${base}_1.o"
+stage2="${base}_2.o"
+stage3="${base}_3.o"
 
-    base="${file%.o}"   # Remove .o extension
-    stage1="${base}_1.o"
-    stage2="${base}_2.o"
-    stage3="${base}_3.o"
-    stage4="${base}_4.o"
+# Step 1: splitter → stage1
+./splitter "$file" "$stage1"
+exit_code=$?
+if [[ $exit_code -eq 2 ]]; then
+    echo "Splitter returned 2, skipping file: $file"
+    exit 0
+elif [[ $exit_code -ne 0 ]]; then
+    echo "FAILED at splitter: $file"
+    exit 1
+fi
 
-    # Step 1: splitter → stage1
-    ./splitter "$file" "$stage1"
-    exit_code=$?
-    if [[ $exit_code -eq 2 ]]; then
-        # Exit code 2: no need to split, skip to next file
-        ((success++))
-        continue
-    elif [[ $exit_code -ne 0 ]]; then
-        echo "FAILED at splitter: $file"
-        ((failure++))
-        echo "------------------------------------------------------------------"
-        continue
-    fi
+# Step 2: python3 reorder.py → stage2
+if ! python3 reorder.py "$stage1" "$stage2"; then
+    echo "FAILED at python3 reorder.py: $file"
+    exit 1
+fi
 
-    # Step 2: python3 reorder.py → stage2
-    if ! python3 reorder.py "$stage1" "$stage2"; then
-        echo "FAILED at python3 reorder.py: $file"
-        ((failure++))
-        echo "------------------------------------------------------------------"
-        continue
-    fi
+# Step 3: python3 update.py → stage3
+if ! python3 update.py "$stage2" "$stage3"; then
+    echo "FAILED at python3 update.py: $file"
+    exit 1
+fi
 
-    # Step 3: python3 update.py → stage3
-    if ! python3 update.py "$stage2" "$stage3"; then
-        echo "FAILED at python3 update.py: $file"
-        ((failure++))
-        echo "------------------------------------------------------------------"
-        continue
-    fi
+# Step 4: objcopy → output
+if ! objcopy -R .text -R .rela.text -R .eh_frame -R .rela.eh_frame "$stage3" "$output"; then
+    echo "FAILED at objcopy: $output"
+    exit 1
+fi
 
-    # Step 4: objcopy → stage4
-    if ! objcopy -R .text -R .rela.text -R .eh_frame -R .rela.eh_frame "$stage3" "$stage4"; then
-        echo "FAILED at objcopy: $file"
-        ((failure++))
-        echo "------------------------------------------------------------------"
-        continue
-    fi
+# Cleanup intermediate files
+rm -f "$stage1" "$stage2" "$stage3"
 
-    rm -f "$file" "$stage1" "$stage2" "$stage3" 
-    ((success++))
-done
-
-echo "==================== RESULT ===================="
-echo "Total files    : $total"
-echo "Total success  : $success"
-echo "Total failures : $failure"
+echo "Processing completed successfully: $output"

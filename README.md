@@ -9,4 +9,8 @@ The splitter currently is functional for only the `.text` section.
 You'll need to have ELFIO: https://github.com/SonNguyen415/ELFIO
 
 ## Usage
-Run `make help` for the list of commands
+
+To build a single object file:
+```sh
+./run.sh <input_file> <output_file>
+```
