@@ -6,11 +6,15 @@ This is some work to try to create more sections in an object file such that eac
 The splitter currently is functional for only the `.text` section.
 
 ## Requirements
-You'll need to have ELFIO: https://github.com/SonNguyen415/ELFIO
+You'll need to have ELFIO: 
+
+```
+git clone https://github.com/SonNguyen415/ELFIO.git external/ELFIO 
+```
 
 ## Usage
 
 To build a single object file:
 ```sh
-./run.sh <input_file> <output_file>
+./run.sh <input.o> <output.o>
 ```
