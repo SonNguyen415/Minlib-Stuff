@@ -21,7 +21,7 @@ TXT_FILES := $(wildcard *.txt)
 OUTPUT_LIST = .outputs
 OUTPUT_FILES := $(shell cat $(OUTPUT_LIST) 2>/dev/null)
 
-.PHONY: all clean object
+.PHONY: all clean object dump
 
 all: $(TEST_OBJ) $(SPLIT_BIN)
 
@@ -39,6 +39,10 @@ $(PARSER_BIN): $(PARSER_SRC)
 
 object:
 	$(CC) -c $(TEST_SRC) -o $(TEST_OBJ)
+
+dump:
+# 	objdump -Shrtpsz $(FILE) > $(FILE:.o=_dump.txt)
+	readelf -aW $(FILE) > $(FILE:.o=.txt)
 
 clean:
 	rm -f $(TEST_OBJ) $(SPLIT_BIN) $(PARSER_BIN) $(TXT_FILES) $(OFILES) $(OUTPUT_FILES) $(OUTPUT_LIST) $(TESTS)

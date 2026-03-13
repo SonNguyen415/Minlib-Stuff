@@ -11,11 +11,22 @@ R_X86_64_PC32 = 2
 R_X86_64_PLT32 = 4
 
 
-def find_text_section_index(elf):
+def get_sym_name(elf, sym_idx):
+    symtab = elf.get_section_by_name(".symtab")
+    if symtab is None or not isinstance(symtab, SymbolTableSection):
+        raise Exception("Cannot find .symtab")
+
+    sym = symtab.get_symbol(sym_idx)
+    if sym is None:
+        raise Exception(f"Cannot find symbol with index {sym_idx}")
+
+    return sym.name
+
+def find_section_index(elf, section_name):
     for i, sec in enumerate(elf.iter_sections()):
-        if sec.name == ".text":
+        if sec.name == section_name:
             return i
-    raise Exception("Cannot find .text")
+    raise Exception(f"Cannot find {section_name}")
 
 
 def find_symtab(elf):
@@ -40,17 +51,30 @@ def load_symbols(symtab):
     return out
 
 
-def find_old_text_section_symbol(symbols, old_text_idx):
+def find_symbol_idx(symbols, section_idx):
+    # Find the symbol index that is the STT_SECTION symbol for the given section index
     for s in symbols:
-        if s["type"] == "STT_SECTION" and s["shndx"] == old_text_idx:
+        if s["type"] == "STT_SECTION" and s["shndx"] == section_idx:
             return s["index"]
-    raise Exception("Cannot find old .text SECTION symbol")
+    raise Exception("Cannot find SECTION symbol")
 
 
-def collect_old_functions(symbols, old_text_idx):
-    funcs = []
+def collect_old_data(symbols, old_data_idx):
+    data_syms = []
     for s in symbols:
-        if s["type"] == "STT_FUNC" and s["shndx"] == old_text_idx:
+        if s["type"] == "STT_SECTION" and s["shndx"] == old_data_idx:
+            data_syms.append(s)
+    return data_syms
+
+
+def collect_old_functions(symbols, old_sym_idx, section_name):
+    funcs = []
+    if section_name == ".text":
+        sec_type = "STT_FUNC"
+    else:
+        sec_type = "STT_OBJECT"
+    for s in symbols:
+        if s["type"] == sec_type and s["shndx"] == old_sym_idx:
             funcs.append({
                 "index": s["index"],
                 "name": s["name"],
@@ -62,10 +86,14 @@ def collect_old_functions(symbols, old_text_idx):
     return funcs
 
 
-def collect_new_functions(symbols, old_text_idx):
+def collect_new_functions(symbols, old_sym_idx, section_name):
     new_funcs = {}
+    if section_name == ".text":
+        sec_type = "STT_FUNC"
+    else:
+        sec_type = "STT_OBJECT"
     for s in symbols:
-        if s["type"] == "STT_FUNC" and s["shndx"] != old_text_idx:
+        if s["type"] == sec_type and s["shndx"] != old_sym_idx:
             new_funcs.setdefault(s["name"], []).append({
                 "index": s["index"],
                 "name": s["name"],
@@ -75,7 +103,6 @@ def collect_new_functions(symbols, old_text_idx):
                 "bind": s["bind"],
             })
     return new_funcs
-
 
 def collect_section_symbols(symbols):
     # map section index -> SECTION symbol index
@@ -147,26 +174,28 @@ def patch_rela_entry(fp, relsec_offset, rel_index, entsize, new_sym_index, rel_t
     fp.seek(r_addend_off)
     fp.write(struct.pack("<q", new_addend))
 
+    
 
 def main():
-    if len(sys.argv) != 3:
-        print(f"usage: {sys.argv[0]} input.o output.o")
+    if len(sys.argv) != 4:
+        print(f"usage: {sys.argv[0]} input.o output.o section_name")
         sys.exit(1)
 
     infile = sys.argv[1]
     outfile = sys.argv[2]
+    section_name = sys.argv[3]
 
     shutil.copyfile(infile, outfile)
 
     with open(outfile, "r+b") as fp:
         elf = ELFFile(fp)
         symtab = find_symtab(elf)
-        old_text_idx = find_text_section_index(elf)
-
         symbols = load_symbols(symtab)
-        old_text_sym_idx = find_old_text_section_symbol(symbols, old_text_idx)
-        old_funcs = collect_old_functions(symbols, old_text_idx)
-        new_funcs = collect_new_functions(symbols, old_text_idx)
+        old_section_idx = find_section_index(elf, section_name)
+        
+        old_sym_idx = find_symbol_idx(symbols, old_section_idx)
+        old_funcs = collect_old_functions(symbols, old_section_idx, section_name)
+        new_funcs = collect_new_functions(symbols, old_section_idx, section_name)
         section_symbols = collect_section_symbols(symbols)
 
         old_func_by_index = {}
@@ -179,6 +208,7 @@ def main():
                 new_func_by_index[f["index"]] = f
 
         for sec in elf.iter_sections():
+            # Find the relocation sections
             if not isinstance(sec, RelocationSection):
                 continue
             if sec["sh_type"] != "SHT_RELA":
@@ -187,21 +217,25 @@ def main():
             relsec_offset = sec["sh_offset"]
             entsize = sec["sh_entsize"]
 
+
             # print(f"Processing relocation section: {sec.name}")
 
+            # For every relocation entry in this section, check if it points to the old symbol, and if so, patch it to point to the new symbol
             for rel_index, rel in enumerate(sec.iter_relocations()):
                 sym_idx = rel["r_info_sym"]
                 rel_type = rel["r_info_type"]
                 addend = rel["r_addend"]
 
-                # Case 1: old .text SECTION symbol
-                if sym_idx == old_text_sym_idx:
-                    # print("CASE 1")
-                    old_addr = addend
+                # pointed_symbol = get_sym_name(elf, sym_idx)
+                # print(f"Pre-Processing - Symbol: {sym_idx} points to {pointed_symbol} + {addend}")
+
+                # Case 1: Points to old symbol (which we're gonna delete)
+                if sym_idx == old_sym_idx:
+                    old_addr = addend 
 
                     owner, new_addend = find_target_function(old_addr, old_funcs)
                     if owner is None:
-                        print(f"  skip rel#{rel_index}: .text+0x{old_addr:x} cannot map to any function")
+                        print(f"  skip rel#{rel_index}: {section_name} +0x{old_addr:x} cannot map to any function")
                         continue
 
                     new_func = find_new_function_symbol(owner, new_funcs)
@@ -215,6 +249,11 @@ def main():
                         print(f"  skip rel#{rel_index}: no SECTION symbol for section {sec_name} {new_func['shndx']}")
                         continue
 
+                    # print("Patching: {} +0x{:x} -> {} +0x{:x} (mode={})".format(
+                    #     owner["name"], old_addr - owner["start"],
+                    #     new_func["name"], new_addend, mode
+                    # ))
+
                     patch_rela_entry(
                         fp,
                         relsec_offset,
@@ -224,22 +263,20 @@ def main():
                         rel_type,
                         new_addend
                     )
-                    continue
-
-                # Case 2: old function symbol in old .text
-                if sym_idx in old_func_by_index:
+    
+                # Case 2: old function symbol in old section may still exist if there are other relocations pointing to it
+                elif sym_idx in old_func_by_index:
                     old_func = old_func_by_index[sym_idx]
 
                     new_func = find_new_function_symbol(old_func, new_funcs)
                     if new_func is None:
-                        print(f"  skip rel#{rel_index}: no new symbol for {old_func['name']}")
+                        # print(f"  skip rel#{rel_index}: no new symbol for {old_func['name']}")
                         continue
 
                     new_sym_index, mode = choose_new_symbol_index(rel_type, new_func, section_symbols)
                     if new_sym_index is None:
                         print(f"  skip rel#{rel_index}: no SECTION symbol for section {new_func['shndx']}")
                         continue
-
 
                     patch_rela_entry(
                         fp,
@@ -250,11 +287,9 @@ def main():
                         rel_type,
                         addend
                     )
-                    continue
 
-                # Case 3: already points to a new split function symbol,
-                # but PC32 should target the SECTION symbol, not FUNC symbol
-                if rel_type == R_X86_64_PC32 and sym_idx in new_func_by_index:
+                # Case 3: already points to a new split function symbol, but PC32 should target the SECTION symbol, not FUNC symbol
+                elif rel_type == R_X86_64_PC32 and sym_idx in new_func_by_index:
                     new_func = new_func_by_index[sym_idx]
 
                     new_sym_index, mode = choose_new_symbol_index(rel_type, new_func, section_symbols)
@@ -274,7 +309,7 @@ def main():
                         rel_type,
                         addend
                     )
-                    continue
+                    
 
 
 if __name__ == "__main__":
