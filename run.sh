@@ -6,7 +6,7 @@ if [[ $# -ne 2 ]]; then
 fi
 
 
-SECTIONS=(".text" ".data")
+SECTIONS=(".text .data")
 
 file="$1"
 output="$2"
@@ -58,7 +58,7 @@ if ! python3 reorder.py "$stage1" "$stage2"; then
 fi
 
 # Step 3: python3 update.py → stage3
-input="$stage2"
+input3="$stage2"
 tmp="${base}_tmp.o"
 final="$stage3"
 
@@ -67,25 +67,25 @@ for section in "${SECTIONS[@]}"; do
        [[ "$section" == ".data" && $data_split -eq 1 ]]; then
 
         # Determine output file for this pass
-        if [[ "$input" == "$stage2" ]]; then
-            output="$tmp"   # first section
+        if [[ "$input3" == "$stage2" ]]; then
+            output3="$tmp"   # first section
         else
-            output="$final" # second section (or single)
+            output3="$final" # second section (or single)
         fi
 
-        if ! python3 update.py "$input" "$output" "$section"; then
+        if ! python3 update.py "$input3" "$output3" "$section"; then
             echo "FAILED at python3 update.py ($section): $file"
             exit 1
         fi
 
         # next input is previous output
-        input="$output"
+        input3="$output3"
     fi
 done
 
 # Ensure final result is in stage3
-if [[ "$input" != "$stage3" ]]; then
-    mv "$input" "$stage3"
+if [[ "$input3" != "$stage3" ]]; then
+    mv "$input3" "$stage3"
 fi
 
 # Step 4: objcopy → stage4

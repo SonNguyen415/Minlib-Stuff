@@ -41,7 +41,7 @@ object:
 	$(CC) -c $(TEST_SRC) -o $(TEST_OBJ)
 
 dump:
-# 	objdump -Shrtpsz $(FILE) > $(FILE:.o=_dump.txt)
+	objdump -Shrtpsz $(FILE) > $(FILE:.o=_dump.txt)
 	readelf -aW $(FILE) > $(FILE:.o=.txt)
 
 clean:
