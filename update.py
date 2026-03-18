@@ -51,13 +51,12 @@ def load_symbols(symtab):
     return out
 
 
-def find_symbol_idx(symbols, section_idx):
+def find_section_symbol_idx(symbols, section_idx):
     # Find the symbol index that is the STT_SECTION symbol for the given section index
     for s in symbols:
         if s["type"] == "STT_SECTION" and s["shndx"] == section_idx:
             return s["index"]
-    raise Exception("Cannot find SECTION symbol")
-
+    return None
 
 def collect_old_data(symbols, old_data_idx):
     data_syms = []
@@ -67,14 +66,16 @@ def collect_old_data(symbols, old_data_idx):
     return data_syms
 
 
-def collect_old_functions(symbols, old_sym_idx, section_name):
+
+
+def collect_old_functions(symbols, old_section_idx, section_name):
     funcs = []
     if section_name == ".text":
-        sec_type = "STT_FUNC"
-    else:
-        sec_type = "STT_OBJECT"
+        sec_type = ["STT_FUNC", "STT_NOTYPE"] # some functions may be marked as STT_NOTYPE, treat them as functions
+    elif section_name == ".data" or section_name == ".rodata":
+        sec_type = ["STT_OBJECT", "STT_NOTYPE"] # some variables may be marked as STT_NOTYPE, treat them as variables
     for s in symbols:
-        if s["type"] == sec_type and s["shndx"] == old_sym_idx:
+        if s["type"] in sec_type and s["shndx"] == old_section_idx:
             funcs.append({
                 "index": s["index"],
                 "name": s["name"],
@@ -86,14 +87,36 @@ def collect_old_functions(symbols, old_sym_idx, section_name):
     return funcs
 
 
-def collect_new_functions(symbols, old_sym_idx, section_name):
+
+from collections import defaultdict
+
+def load_section_map(path):
+    section_map = defaultdict(set)
+
+    with open(path) as f:
+        for line in f:
+            sec, idx = line.strip().split()
+            section_map[sec].add(int(idx))
+
+    return section_map
+
+def collect_new_functions(elf, symbols, old_section_idx, section_name):
     new_funcs = {}
-    if section_name == ".text":
-        sec_type = "STT_FUNC"
+    section_map = load_section_map("new_sections.txt")
+    if section_name == ".data":
+        my_sections   = section_map[".data"]
+    elif section_name == ".rodata":
+        my_sections = section_map[".rodata"]
     else:
-        sec_type = "STT_OBJECT"
+        my_sections   = section_map[".text"]
+
+    if section_name == ".text":
+        sec_type = ["STT_FUNC", "STT_NOTYPE"]
+    elif section_name == ".data" or section_name == ".rodata":
+        sec_type = ["STT_OBJECT", "STT_NOTYPE"]
     for s in symbols:
-        if s["type"] == sec_type and s["shndx"] != old_sym_idx:
+        # cur_section = elf.get_section(s["shndx"]) if isinstance(s["shndx"], int) else None   
+        if s["type"] in sec_type and s["shndx"] in my_sections:
             new_funcs.setdefault(s["name"], []).append({
                 "index": s["index"],
                 "name": s["name"],
@@ -101,6 +124,7 @@ def collect_new_functions(symbols, old_sym_idx, section_name):
                 "size": s["size"],
                 "shndx": s["shndx"],
                 "bind": s["bind"],
+                "section": elf.get_section(s["shndx"]).name if isinstance(s["shndx"], int) else None,
             })
     return new_funcs
 
@@ -113,26 +137,17 @@ def collect_section_symbols(symbols):
     return sec_to_sym
 
 
-def find_target_function(addr, old_funcs):
-    # Case 1: inside a function
-    for f in old_funcs:
-        start = f["start"]
-        end = f["start"] + f["size"]
-        if start <= addr < end:
-            return f, addr - start
+def find_target_function(addend, old_funcs): 
+    for i in range(len(old_funcs) - 1):
+        if old_funcs[i]["start"] <= addend < old_funcs[i + 1]["start"]:
+            return old_funcs[i], addend - old_funcs[i]["start"]
 
-    # Case 2: in a gap before a later function
-    for f in old_funcs:
-        if addr < f["start"]:
-            return f, addr - f["start"]
-
-    # Case 3: after the last function, use the last function
     if old_funcs:
         last = old_funcs[-1]
-        return last, addr - last["start"]
-
+        return last, addend - last["start"]
+    
     return None, None
-
+    
 
 def find_new_function_symbol(old_func, new_funcs):
     cands = new_funcs.get(old_func["name"], [])
@@ -150,7 +165,7 @@ def find_new_function_symbol(old_func, new_funcs):
 def choose_new_symbol_index(rel_type, new_func, section_symbols):
     # Keep relocation type unchanged.
     # Only choose symbol differently.
-    if rel_type == R_X86_64_PC32:
+    if rel_type == R_X86_64_PC32: # PC32 should point to section symbol, not function symbol
         sec_idx = new_func["shndx"]
         sec_sym = section_symbols.get(sec_idx)
         if sec_sym is None:
@@ -184,7 +199,7 @@ def main():
     infile = sys.argv[1]
     outfile = sys.argv[2]
     section_name = sys.argv[3]
-
+    
     shutil.copyfile(infile, outfile)
 
     with open(outfile, "r+b") as fp:
@@ -192,10 +207,10 @@ def main():
         symtab = find_symtab(elf)
         symbols = load_symbols(symtab)
         old_section_idx = find_section_index(elf, section_name)
-        
-        old_sym_idx = find_symbol_idx(symbols, old_section_idx)
+        old_sym_idx = find_section_symbol_idx(symbols, old_section_idx)
+
         old_funcs = collect_old_functions(symbols, old_section_idx, section_name)
-        new_funcs = collect_new_functions(symbols, old_section_idx, section_name)
+        new_funcs = collect_new_functions(elf, symbols, old_section_idx, section_name)
         section_symbols = collect_section_symbols(symbols)
 
         old_func_by_index = {}
@@ -207,6 +222,7 @@ def main():
             for f in cands:
                 new_func_by_index[f["index"]] = f
 
+        
         for sec in elf.iter_sections():
             # Find the relocation sections
             if not isinstance(sec, RelocationSection):
@@ -222,32 +238,30 @@ def main():
 
             # For every relocation entry in this section, check if it points to the old symbol, and if so, patch it to point to the new symbol
             for rel_index, rel in enumerate(sec.iter_relocations()):
-                sym_idx = rel["r_info_sym"]
+                sym_idx = rel["r_info_sym"] # The symbol index that this relocation entry points to originally
                 rel_type = rel["r_info_type"]
                 addend = rel["r_addend"]
 
-                # pointed_symbol = get_sym_name(elf, sym_idx)
-                # print(f"Pre-Processing - Symbol: {sym_idx} points to {pointed_symbol} + {addend}")
+                pointed_symbol = get_sym_name(elf, sym_idx)
+                # print(f"Pre-Processing - Symbol: {sym_idx} points to {pointed_symbol} + {addend}. Type: {rel_type}")
 
-                # Case 1: Points to old symbol (which we're gonna delete)
-                if sym_idx == old_sym_idx:
-                    old_addr = addend 
-
-                    owner, new_addend = find_target_function(old_addr, old_funcs)
-                    if owner is None:
-                        print(f"  skip rel#{rel_index}: {section_name} +0x{old_addr:x} cannot map to any function")
-                        continue
-
+                # Case 1: Points to old section symbol (which we're gonna delete)
+                if sym_idx == old_sym_idx: 
+                    owner, new_addend = find_target_function(addend, old_funcs)
+                    if owner is None and rel_type == R_X86_64_PLT32:
+                        print(f"  Case 1: skip rel#{rel_index}: {section_name} +0x{addend:x} cannot map to any function/variable. File: {infile}")
+                        sys.exit(1)
+                    
                     new_func = find_new_function_symbol(owner, new_funcs)
-                    if new_func is None:
-                        print(f"  skip rel#{rel_index}: no new symbol for {owner['name']}")
-                        continue
+                    if new_func is None and rel_type == R_X86_64_PLT32:
+                        print(f"  Case 1: skip rel#{rel_index}: no new symbol for {owner['name']}. File: {infile}")
+                        sys.exit(1)
 
                     new_sym_index, mode = choose_new_symbol_index(rel_type, new_func, section_symbols)
                     if new_sym_index is None:
                         sec_name = elf.get_section(new_func["shndx"]).name
-                        print(f"  skip rel#{rel_index}: no SECTION symbol for section {sec_name} {new_func['shndx']}")
-                        continue
+                        print(f"  Case 1: skip rel#{rel_index}: no SECTION symbol for section {sec_name}, {new_func['shndx']}. File: {infile}")
+                        sys.exit(1)
 
                     # print("Patching: {} +0x{:x} -> {} +0x{:x} (mode={})".format(
                     #     owner["name"], old_addr - owner["start"],
@@ -270,13 +284,14 @@ def main():
 
                     new_func = find_new_function_symbol(old_func, new_funcs)
                     if new_func is None:
-                        # print(f"  skip rel#{rel_index}: no new symbol for {old_func['name']}")
+                        print(f"  Case 2: skip rel#{rel_index}: no new symbol for {old_func['name']}. File: {infile}")
                         continue
 
                     new_sym_index, mode = choose_new_symbol_index(rel_type, new_func, section_symbols)
                     if new_sym_index is None:
-                        print(f"  skip rel#{rel_index}: no SECTION symbol for section {new_func['shndx']}")
-                        continue
+                        sec_name = elf.get_section(new_func["shndx"]).name
+                        print(f"  Case 2: skip rel#{rel_index}: no SECTION symbol for section {sec_name}, {new_func['shndx']}. File: {infile}")
+                        sys.exit(1)
 
                     patch_rela_entry(
                         fp,
@@ -292,12 +307,15 @@ def main():
                 elif rel_type == R_X86_64_PC32 and sym_idx in new_func_by_index:
                     new_func = new_func_by_index[sym_idx]
 
+
                     new_sym_index, mode = choose_new_symbol_index(rel_type, new_func, section_symbols)
                     if new_sym_index is None:
-                        print(f"  skip rel#{rel_index}: no SECTION symbol for section {new_func['shndx']}")
-                        continue
+                        sec_name = elf.get_section(new_func["shndx"]).name
+                        print(f"  Case 3: skip rel#{rel_index}: no SECTION symbol for section {sec_name}, {new_func['shndx']}. File: {infile}")
+                        sys.exit(1)
 
                     if new_sym_index == sym_idx:
+                        print(f"  Case 3: skip rel#{rel_index}: new symbol index is the same. File: {infile}")
                         continue
 
                     patch_rela_entry(
@@ -309,6 +327,7 @@ def main():
                         rel_type,
                         addend
                     )
+
                     
 
 
