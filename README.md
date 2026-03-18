@@ -14,6 +14,8 @@ git clone https://github.com/SonNguyen415/ELFIO.git external/ELFIO
 
 ## Usage
 
+Run `make splitter` to compile the splitter tool.
+
 To build a single object file:
 ```sh
 ./run.sh <input.o> <output.o>

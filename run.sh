@@ -11,9 +11,6 @@ SECTIONS=(".text" ".data" ".rodata" ".data.rel.ro.local")
 file="$1"
 output="$2"
 
-# Make sure splitter is built
-make splitter || { echo "Failed to build splitter"; exit 1; }
-
 base="${file%.o}"   # Remove .o extension
 stage1="${base}_1.o"
 stage2="${base}_2.o"
