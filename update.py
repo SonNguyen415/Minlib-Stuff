@@ -66,14 +66,13 @@ def collect_old_data(symbols, old_data_idx):
     return data_syms
 
 
-
-
 def collect_old_functions(symbols, old_section_idx, section_name):
     funcs = []
+    sec_type = ["STT_NOTYPE"] # some symbols may be marked as NOTYPE, treat them as both functions and variables
     if section_name == ".text":
-        sec_type = ["STT_FUNC", "STT_NOTYPE"] # some functions may be marked as STT_NOTYPE, treat them as functions
-    elif section_name == ".data" or section_name == ".rodata":
-        sec_type = ["STT_OBJECT", "STT_NOTYPE"] # some variables may be marked as STT_NOTYPE, treat them as variables
+        sec_type.append("STT_FUNC") 
+    elif section_name == ".data" or section_name == ".rodata" or section_name == ".data.rel.ro.local":
+        sec_type.append("STT_OBJECT") 
     for s in symbols:
         if s["type"] in sec_type and s["shndx"] == old_section_idx:
             funcs.append({
@@ -107,13 +106,16 @@ def collect_new_functions(elf, symbols, old_section_idx, section_name):
         my_sections   = section_map[".data"]
     elif section_name == ".rodata":
         my_sections = section_map[".rodata"]
+    elif section_name == ".data.rel.ro.local":
+        my_sections = section_map[".data.rel.ro.local"]
     else:
         my_sections   = section_map[".text"]
 
+    sec_type = ["STT_NOTYPE"] # some symbols may be marked as NOTYPE, treat them as both functions and variables
     if section_name == ".text":
-        sec_type = ["STT_FUNC", "STT_NOTYPE"]
-    elif section_name == ".data" or section_name == ".rodata":
-        sec_type = ["STT_OBJECT", "STT_NOTYPE"]
+        sec_type.append("STT_FUNC") 
+    elif section_name == ".data" or section_name == ".rodata" or section_name == ".data.rel.ro.local":
+        sec_type.append("STT_OBJECT") 
     for s in symbols:
         # cur_section = elf.get_section(s["shndx"]) if isinstance(s["shndx"], int) else None   
         if s["type"] in sec_type and s["shndx"] in my_sections:

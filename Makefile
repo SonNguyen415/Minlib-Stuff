@@ -14,8 +14,6 @@ TEST_SRC = test.c
 TEST_OBJ = test.o
 
 # Test results
-NUMS = $(shell seq 0 9)  
-TESTS = $(foreach n, $(NUMS), test$(n))
 OFILES = $(wildcard *.o)
 TXT_FILES := $(wildcard *.txt) 
 OUTPUT_LIST = .outputs
@@ -44,5 +42,10 @@ dump:
 	objdump -Shrtpsz $(FILE) > $(FILE:.o=_dump.txt)
 	readelf -aW $(FILE) > $(FILE:.o=.txt)
 
+clean_all: clean
+	rm -r $(SPLIT_BIN)
+
+
 clean:
-	rm -f $(TEST_OBJ) $(SPLIT_BIN) $(PARSER_BIN) $(TXT_FILES) $(OFILES) $(OUTPUT_FILES) $(OUTPUT_LIST) $(TESTS)
+	rm -f $(TEST_OBJ) $(PARSER_BIN) $(TXT_FILES) $(OFILES) $(OUTPUT_FILES) $(OUTPUT_LIST) 
+

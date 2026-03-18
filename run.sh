@@ -6,7 +6,7 @@ if [[ $# -ne 2 ]]; then
 fi
 
 
-SECTIONS=(".text" ".data" ".rodata")
+SECTIONS=(".text" ".data" ".rodata" ".data.rel.ro.local")
 
 file="$1"
 output="$2"
@@ -22,9 +22,10 @@ stage3="${base}_3.o"
 text_split=0
 data_split=0
 rodata_split=0
+rodata_rel_ro_local_split=0
 input="$file"
 section_idx="new_sections.txt"
-rm -f $section_idx
+rm -f $section_idx 
 
 # Step 1: splitter → stage1
 for section in "${SECTIONS[@]}"; do
@@ -46,14 +47,16 @@ for section in "${SECTIONS[@]}"; do
         data_split=1
     elif [[ "$section" == ".rodata" ]]; then
         rodata_split=1
+    elif [[ "$section" == ".data.rel.ro.local" ]]; then
+        data_rel_ro_local_split=1
     fi
 done
 
 
-echo "Text split: $text_split, Data split: $data_split, Rodata split: $rodata_split"
+echo "Text split: $text_split, Data split: $data_split, Rodata split: $rodata_split, Data.rel.ro.local split: $data_rel_ro_local_split"
 
 # Skip remaining steps if no split was needed
-if [[ $text_split -eq 0 && $data_split -eq 0 && $rodata_split -eq 0 ]]; then
+if [[ $text_split -eq 0 && $data_split -eq 0 && $rodata_split -eq 0 && $data_rel_ro_local_split -eq 0 ]]; then
     cp "$file" "$stage4"
     exit 0
 fi
@@ -75,6 +78,8 @@ for section in "${SECTIONS[@]}"; do
         output3="${base}_3_data.o"   
     elif [[ "$section" == ".rodata" && $rodata_split -eq 1 ]]; then
         output3="${base}_3_rodata.o"   
+    elif [[ "$section" == ".data.rel.ro.local" && $data_rel_ro_local_split -eq 1 ]]; then
+        output3="${base}_3_data.rel.ro.local.o"
     else
         continue
     fi
@@ -97,6 +102,7 @@ objcopy_args=()
 [[ $text_split -eq 1 ]] && objcopy_args+=(-R .text -R .rela.text)
 [[ $data_split -eq 1 ]] && objcopy_args+=(-R .data -R .rela.data)
 [[ $rodata_split -eq 1 ]] && objcopy_args+=(-R .rodata -R .rela.rodata)
+[[ $data_rel_ro_local_split -eq 1 ]] && objcopy_args+=(-R .data.rel.ro.local -R .rela.data.rel.ro.local)
 objcopy_args+=(-R .eh_frame -R .rela.eh_frame)
 
 if ! objcopy "${objcopy_args[@]}" "$stage3" "$output"; then
@@ -105,6 +111,6 @@ if ! objcopy "${objcopy_args[@]}" "$stage3" "$output"; then
 fi
 
 # Cleanup intermediate files 
-# rm -f "$stage1" "$stage2" "$stage3" "$section_idx"
+rm -f "$stage1" "$stage2" "$stage3" "$section_idx"
  
 echo "Splitting successful: $output"

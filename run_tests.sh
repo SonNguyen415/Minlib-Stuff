@@ -7,7 +7,7 @@ fi
 
 DIR="$1"
 RESULT_DIR="results"
-SECTIONS=(".text" ".data" ".rodata")
+SECTIONS=(".text" ".data" ".rodata" ".data.rel.ro.local")
 
 rm -rf "$DIR/$RESULT_DIR"
 mkdir -p "$DIR/$RESULT_DIR"
@@ -39,6 +39,7 @@ for file in $(ls "$DIR"/*.o 2>/dev/null | sort); do
     text_split=0
     data_split=0
     rodata_split=0
+    data_rel_ro_local_split=0
     rm -f "$section_idx"
     # Step 1: splitter for .text and .data
     for section in "${SECTIONS[@]}"; do
@@ -62,11 +63,13 @@ for file in $(ls "$DIR"/*.o 2>/dev/null | sort); do
             data_split=1
         elif [[ "$section" == ".rodata" ]]; then
             rodata_split=1
+        elif [[ "$section" == ".data.rel.ro.local" ]]; then
+            data_rel_ro_local_split=1
         fi
     done
 
     # Skip remaining steps if no split was needed
-    if [[ $text_split -eq 0 && $data_split -eq 0 && $rodata_split -eq 0 ]]; then
+    if [[ $text_split -eq 0 && $data_split -eq 0 && $rodata_split -eq 0 && $data_rel_ro_local_split -eq 0 ]]; then
         ((success++))
         cp "$file" "$stage4"
         continue
@@ -90,6 +93,8 @@ for file in $(ls "$DIR"/*.o 2>/dev/null | sort); do
             output3="${base}_3_data.o"   
         elif [[ "$section" == ".rodata" && $rodata_split -eq 1 ]]; then
             output3="${base}_3_rodata.o"   
+        elif [[ "$section" == ".data.rel.ro.local" && $data_rel_ro_local_split -eq 1 ]]; then
+            output3="${base}_3_data.rel.ro.local.o"
         else
             continue
         fi
@@ -116,6 +121,7 @@ for file in $(ls "$DIR"/*.o 2>/dev/null | sort); do
     [[ $text_split -eq 1 ]] && objcopy_args+=(-R .text -R .rela.text)
     [[ $data_split -eq 1 ]] && objcopy_args+=(-R .data -R .rela.data)
     [[ $rodata_split -eq 1 ]] && objcopy_args+=(-R .rodata -R .rela.rodata)
+    [[ $data_rel_ro_local_split -eq 1 ]] && objcopy_args+=(-R .data.rel.ro.local -R .rela.data.rel.ro.local)
     objcopy_args+=(-R .eh_frame -R .rela.eh_frame)
 
     if ! objcopy "${objcopy_args[@]}" "$stage3" "$stage4"; then

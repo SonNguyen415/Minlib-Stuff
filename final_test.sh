@@ -1,5 +1,6 @@
-# ./run_tests.sh libcrypto
-# ./run_tests.sh libssl
+./run_tests.sh libcrypto
+./run_tests.sh libssl
+rm results/*
 ld -r -o libcrypto.o libcrypto/*.o
 ld -r -o libssl.o libssl/*.o
 gcc -shared -fPIC -fno-plt -Wl,-z,now libcrypto.o -o results/libcrypto.so
