@@ -30,7 +30,7 @@ struct RelocEntry {
 };
 
 std::vector<Symbol> symbols_list;
-std::unordered_map<Elf_Word, Elf_Word> symbol_mapping; // old sym idx -> new sym idx
+std::unordered_map<Elf_Word, std::tuple<Elf_Word, Elf_Word>> symbol_mapping; // old sym idx -> new sym idx
 
 // Function to gather symbols from the symbol table
 void 
@@ -44,7 +44,7 @@ gather_symbols(symbol_section_accessor& symbols, section* sec)
         sym.idx = i;
 
         // Skip empty symbols or symbols not in the target section
-        if (sym.name.empty() || sym.section_index != section_index) {
+        if (sym.name.empty() || sym.section_index != section_index || sym.type == STT_SECTION) {
             continue;
         }
         symbols_list.push_back(sym);
@@ -92,8 +92,12 @@ create_relo(elfio& writer, section* original_sec, section* new_sec, Elf64_Addr s
                 if (original_reloc_entry.offset >= sym_offset && original_reloc_entry.offset < sym_offset + new_sec->get_size()) {
                     Elf64_Addr new_offset = original_reloc_entry.offset - sym_offset; // Adjust offset for the new section
                     Elf_Word reloc_symbol_idx = original_reloc_entry.symbol;
-                    if (symbol_mapping.find(reloc_symbol_idx) != symbol_mapping.end()) { 
-                        reloc_symbol_idx = symbol_mapping[reloc_symbol_idx]; // Update symbol index to the new symbol
+                    if (symbol_mapping.find(reloc_symbol_idx) != symbol_mapping.end()) {
+                        auto& sym_idx = symbol_mapping[reloc_symbol_idx];
+                        reloc_symbol_idx = std::get<0>(sym_idx);
+                        if (original_reloc_entry.type == R_X86_64_PC32) {
+                            reloc_symbol_idx = std::get<1>(sym_idx);
+                        } 
                     }
                     rel_writer.add_entry(new_offset, reloc_symbol_idx, original_reloc_entry.type, original_reloc_entry.addend);
                 }
@@ -138,6 +142,7 @@ get_section_symbol_by_name(symbol_section_accessor& symbols, const elfio& reader
     return sec_sym; // idx == -1 means not found
 }
 
+
 // Function to create new section from symbols
 void 
 create_sections_from_symbols(elfio& writer, section* original_sec, symbol_section_accessor& symbols) 
@@ -164,13 +169,18 @@ create_sections_from_symbols(elfio& writer, section* original_sec, symbol_sectio
     }
 
     // Create a new section for each symbol
-    for (Elf_Xword i = 0; i < symbols_list.size(); ++i) {       
+    for (Elf_Xword i = 0; i < symbols_list.size(); ++i) {  
         const Symbol& sym = symbols_list[i];
-        Elf_Sxword size = sym.size;
         Elf64_Addr sym_offset = sym.value; // Offset of the symbol relative to the section's address
-
+        Elf_Sxword size = sym.size;
+        if (i < symbols_list.size()-1) {;
+            size = symbols_list[i+1].value - sym_offset;
+        } else {
+            size = original_sec->get_size() - sym_offset;
+        }
         std::string symbol_data(target_data + sym_offset, size);
-    
+        
+
         // Create a new section
         std::string new_name = original_sec->get_name() + "." + sym.name;
         section* new_sec = writer.sections.add(new_name);
@@ -181,21 +191,21 @@ create_sections_from_symbols(elfio& writer, section* original_sec, symbol_sectio
         new_sec->set_type(target_type);
         new_sec->set_flags(target_flags);
         new_sec->set_addr_align(target_align);
-        new_sec->set_address(0); // Object files won't need this, linker can decide
+        new_sec->set_address(0);
         new_sec->set_data(symbol_data); 
 
         // Add symbol mapping to the symbol table
         Elf_Word name_offset = str_accessor.add_string(sym.name);
-        Elf_Word new_sym_idx = symbols.add_symbol(name_offset, sym.value, sym.size, sym.bind, sym.type, sym.other, new_sec->get_index());
+        Elf_Word sec_sym_idx = symbols.add_symbol(name_offset, 0, 0, og_sec_sym.bind, STT_SECTION, sym.other, new_sec->get_index());
+        Elf_Word new_sym_idx = symbols.add_symbol(name_offset, 0, sym.size, sym.bind, sym.type, sym.other, new_sec->get_index());
 
         // Add symbol of the section to the symbol table
-        symbols.add_symbol(name_offset, 0, 0, og_sec_sym.bind, STT_SECTION, sym.other, new_sec->get_index());
+        // name_offset = str_accessor.add_string(sym.name);
 
-        symbol_mapping[sym.idx] = new_sym_idx;
+        symbol_mapping[sym.idx] = std::make_tuple(new_sym_idx, sec_sym_idx);
         create_relo(writer, original_sec, new_sec, sym_offset);
-
-        
         out << original_sec->get_name() << " " << new_sec->get_index() << "\n";
+
     }
     out.close();
 }
@@ -267,13 +277,6 @@ main(int argc, char** argv)
     }
 
     int ret;
-    // for (const auto& sec_name : sections_to_split) {
-    //     ret = split_section(reader, input_path, output_path, sec_name);
-    //     if (ret == 1) {
-    //         std::cerr << "Failed to split " << sec_name << " section\n";
-    //         return ret;
-    //     }
-    // }
     ret = split_section(reader, input_path, output_path, section_name);
     if (ret == 1) {
         std::cerr << "Failed to split " << section_name << " section\n";

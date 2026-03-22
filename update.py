@@ -305,31 +305,6 @@ def main():
                         addend
                     )
 
-                # Case 3: already points to a new split function symbol, but PC32 should target the SECTION symbol, not FUNC symbol
-                elif rel_type == R_X86_64_PC32 and sym_idx in new_func_by_index:
-                    new_func = new_func_by_index[sym_idx]
-
-
-                    new_sym_index, mode = choose_new_symbol_index(rel_type, new_func, section_symbols)
-                    if new_sym_index is None:
-                        sec_name = elf.get_section(new_func["shndx"]).name
-                        print(f"  Case 3: skip rel#{rel_index}: no SECTION symbol for section {sec_name}, {new_func['shndx']}. File: {infile}")
-                        sys.exit(1)
-
-                    if new_sym_index == sym_idx:
-                        print(f"  Case 3: skip rel#{rel_index}: new symbol index is the same. File: {infile}")
-                        continue
-
-                    patch_rela_entry(
-                        fp,
-                        relsec_offset,
-                        rel_index,
-                        entsize,
-                        new_sym_index,
-                        rel_type,
-                        addend
-                    )
-
                     
 
 
