@@ -167,7 +167,7 @@ create_sections_from_symbols(elfio& writer, section* original_sec, symbol_sectio
         Elf_Word og_name_offset = str_accessor.add_string(original_sec->get_name());
         symbols.add_symbol(og_name_offset, 0, 0, STB_LOCAL, STT_SECTION, 0, original_sec->get_index());
     }
-
+    og_sec_sym = get_section_symbol_by_name(symbols, writer, original_sec->get_name());
     // Create a new section for each symbol
     for (Elf_Xword i = 0; i < symbols_list.size(); ++i) {  
         const Symbol& sym = symbols_list[i];
@@ -178,8 +178,7 @@ create_sections_from_symbols(elfio& writer, section* original_sec, symbol_sectio
         } else {
             size = original_sec->get_size() - sym_offset;
         }
-        std::string symbol_data(target_data + sym_offset, size);
-        
+        std::string symbol_data(target_data + sym_offset, size);    
 
         // Create a new section
         std::string new_name = original_sec->get_name() + "." + sym.name;

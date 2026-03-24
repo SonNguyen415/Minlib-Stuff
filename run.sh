@@ -80,7 +80,6 @@ for section in "${SECTIONS[@]}"; do
     else
         continue
     fi
-
     if ! python3 update.py "$input3" "$output3" "$section"; then
         echo "FAILED at python3 update.py ($section): $file"
         exit 1
@@ -93,7 +92,6 @@ if [[ "$input3" != "$stage3" ]]; then
     mv "$input3" "$stage3"
 fi
 
-echo "Objcopy file: $stage3"
 # Step 4: objcopy → stage4
 objcopy_args=()
 [[ $text_split -eq 1 ]] && objcopy_args+=(-R .text -R .rela.text)

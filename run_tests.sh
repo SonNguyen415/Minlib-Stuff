@@ -64,6 +64,7 @@ for file in $(ls "$DIR"/*.o 2>/dev/null | sort); do
         elif [[ "$section" == ".rodata" ]]; then
             rodata_split=1
         elif [[ "$section" == ".data.rel.ro.local" ]]; then
+            # echo "data.rel.ro.local split detected in $file"
             data_rel_ro_local_split=1
         fi
     done
@@ -144,7 +145,7 @@ echo "Total failures : $failure"
 # ar x libcrypto.a
 # ld -r -o original/libcrypto.o libcrypto/*.o
 # ld -r -o libcrypto.o libcrypto/results/*.o
-# c
+# gcc -shared -fPIC -fno-plt -Wl,-z,now libcrypto.o -o results/libcrypto.so
 
 # ar x libssl.a
 # ld -r -o original/libssl.o libssl/*.o
