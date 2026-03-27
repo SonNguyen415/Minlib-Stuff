@@ -7,7 +7,7 @@ fi
 
 DIR="$1"
 RESULT_DIR="results"
-SECTIONS=(".text" ".data" ".rodata" ".data.rel.ro.local")
+SECTIONS=(".text" ".data" ".rodata" ".data.rel.ro.local" ".bss")
 
 rm -rf "$DIR/$RESULT_DIR"
 mkdir -p "$DIR/$RESULT_DIR"
@@ -16,6 +16,7 @@ make splitter
 
 total=0
 success=0
+skip=0
 failure=0
 section_idx="new_sections.txt"
 
@@ -40,14 +41,15 @@ for file in $(ls "$DIR"/*.o 2>/dev/null | sort); do
     data_split=0
     rodata_split=0
     data_rel_ro_local_split=0
+    bss_split=0
     rm -f "$section_idx"
-    # Step 1: splitter for .text and .data
+    # Step 1: split
     for section in "${SECTIONS[@]}"; do
         ./splitter "$input" "$stage1" "$section"
         exit_code=$?
 
         if [[ $exit_code -eq 2 ]]; then
-            continue
+            continue 
         elif [[ $exit_code -ne 0 ]]; then
             echo "FAILED at splitter: $file"
             ((failure++))
@@ -66,12 +68,14 @@ for file in $(ls "$DIR"/*.o 2>/dev/null | sort); do
         elif [[ "$section" == ".data.rel.ro.local" ]]; then
             # echo "data.rel.ro.local split detected in $file"
             data_rel_ro_local_split=1
+        elif [[ "$section" == ".bss" ]]; then
+            bss_split=1 
         fi
     done
 
-    # Skip remaining steps if no split was needed
-    if [[ $text_split -eq 0 && $data_split -eq 0 && $rodata_split -eq 0 && $data_rel_ro_local_split -eq 0 ]]; then
-        ((success++))
+    # # Skip remaining steps if no split was needed
+    if [[ $text_split -eq 0 && $data_split -eq 0 && $rodata_split -eq 0 && $data_rel_ro_local_split -eq 0 && $bss_split -eq 0 ]]; then
+        ((skip++))
         cp "$file" "$stage4"
         continue
     fi
@@ -96,6 +100,8 @@ for file in $(ls "$DIR"/*.o 2>/dev/null | sort); do
             output3="${base}_3_rodata.o"   
         elif [[ "$section" == ".data.rel.ro.local" && $data_rel_ro_local_split -eq 1 ]]; then
             output3="${base}_3_data.rel.ro.local.o"
+        elif [[ "$section" == ".bss" && $bss_split -eq 1 ]]; then
+            output3="${base}_3_bss.o" 
         else
             continue
         fi
@@ -123,6 +129,7 @@ for file in $(ls "$DIR"/*.o 2>/dev/null | sort); do
     [[ $data_split -eq 1 ]] && objcopy_args+=(-R .data -R .rela.data)
     [[ $rodata_split -eq 1 ]] && objcopy_args+=(-R .rodata -R .rela.rodata)
     [[ $data_rel_ro_local_split -eq 1 ]] && objcopy_args+=(-R .data.rel.ro.local -R .rela.data.rel.ro.local)
+    [[ $bss_split -eq 1 ]] && objcopy_args+=(-R .bss -R .rela.bss)
     objcopy_args+=(-R .eh_frame -R .rela.eh_frame)
 
     if ! objcopy "${objcopy_args[@]}" "$stage3" "$stage4"; then
@@ -140,6 +147,7 @@ done
 echo "==================== RESULT ===================="
 echo "Total files    : $total"
 echo "Total success  : $success"
+echo "Total skipped  : $skip"
 echo "Total failures : $failure"
 
 # ar x libcrypto.a

@@ -145,7 +145,7 @@ get_section_symbol_by_name(symbol_section_accessor& symbols, const elfio& reader
 
 // Function to create new section from symbols
 void 
-create_sections_from_symbols(elfio& writer, section* original_sec, symbol_section_accessor& symbols) 
+create_sections_from_symbols(elfio& writer, section* original_sec, symbol_section_accessor& symbols, bool is_bss) 
 {
     std::ofstream out("new_sections.txt", std::ios::app);
     const char* target_data = original_sec->get_data();
@@ -168,6 +168,7 @@ create_sections_from_symbols(elfio& writer, section* original_sec, symbol_sectio
         symbols.add_symbol(og_name_offset, 0, 0, STB_LOCAL, STT_SECTION, 0, original_sec->get_index());
     }
     og_sec_sym = get_section_symbol_by_name(symbols, writer, original_sec->get_name());
+
     // Create a new section for each symbol
     for (Elf_Xword i = 0; i < symbols_list.size(); ++i) {  
         const Symbol& sym = symbols_list[i];
@@ -178,8 +179,7 @@ create_sections_from_symbols(elfio& writer, section* original_sec, symbol_sectio
         } else {
             size = original_sec->get_size() - sym_offset;
         }
-        std::string symbol_data(target_data + sym_offset, size);    
-
+    
         // Create a new section
         std::string new_name = original_sec->get_name() + "." + sym.name;
         section* new_sec = writer.sections.add(new_name);
@@ -187,19 +187,22 @@ create_sections_from_symbols(elfio& writer, section* original_sec, symbol_sectio
             std::cerr << "Failed to create new section for symbol: " << sym.name << "\n";
             continue;
         }
+      
+        if (!is_bss) {
+            std::string symbol_data(target_data + sym_offset, size);  
+            new_sec->set_data(symbol_data); 
+        }
+
         new_sec->set_type(target_type);
         new_sec->set_flags(target_flags);
         new_sec->set_addr_align(target_align);
         new_sec->set_address(0);
-        new_sec->set_data(symbol_data); 
 
         // Add symbol mapping to the symbol table
         Elf_Word name_offset = str_accessor.add_string(sym.name);
         Elf_Word sec_sym_idx = symbols.add_symbol(name_offset, 0, 0, og_sec_sym.bind, STT_SECTION, sym.other, new_sec->get_index());
         Elf_Word new_sym_idx = symbols.add_symbol(name_offset, 0, sym.size, sym.bind, sym.type, sym.other, new_sec->get_index());
 
-        // Add symbol of the section to the symbol table
-        // name_offset = str_accessor.add_string(sym.name);
 
         symbol_mapping[sym.idx] = std::make_tuple(new_sym_idx, sec_sym_idx);
         create_relo(writer, original_sec, new_sec, sym_offset);
@@ -237,9 +240,11 @@ split_section(elfio& reader, const std::string& input_path, const std::string& o
     if (symbols_list.empty() || (symbols_list.size() == 1 && symbols_list[0].type == STT_SECTION)) {
         return 2;
     }
+    
+    bool is_bss = section_name == ".bss";
 
     // Create new sections from symbols
-    create_sections_from_symbols(reader, original_sec, symbols);
+    create_sections_from_symbols(reader, original_sec, symbols, is_bss);
 
     // Save the modified ELF
     if (!reader.save(output_path)) {
